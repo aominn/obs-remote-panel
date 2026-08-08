@@ -10,11 +10,11 @@ import { useCloudSync } from './hooks/use-cloud-sync'
 import { useObs } from './hooks/use-obs'
 import { useSettings } from './hooks/use-settings'
 import { validateObsUrl } from './lib/settings'
+import { loadActiveTab, saveActiveTab } from './lib/view-state'
+import type { MainTabId } from './lib/view-state'
 import type { ConnectionStatus } from './types'
 
-type TabId = 'quick' | 'scenes' | 'sources' | 'audio' | 'details' | 'settings'
-
-const TABS: { id: TabId; label: string; icon: string }[] = [
+const TABS: { id: MainTabId; label: string; icon: string }[] = [
   { id: 'quick', label: 'クイック', icon: '◆' },
   { id: 'scenes', label: 'シーン', icon: '▣' },
   { id: 'sources', label: 'ソース', icon: '◫' },
@@ -33,7 +33,7 @@ const STATUS_LABELS: Record<ConnectionStatus, string> = {
 
 export default function App() {
   const mockMode = new URLSearchParams(window.location.search).get('mock') === '1'
-  const [tab, setTab] = useState<TabId>('quick')
+  const [tab, setTab] = useState<MainTabId>(() => loadActiveTab())
   const [notice, setNotice] = useState<string | null>(null)
   const [online, setOnline] = useState(navigator.onLine)
   const {
@@ -56,6 +56,16 @@ export default function App() {
     setNotice(error instanceof Error ? error.message : '操作に失敗しました。OBSの状態を確認してください。')
   }, [])
 
+  const selectTab = useCallback((nextTab: MainTabId) => {
+    setTab(nextTab)
+    saveActiveTab(nextTab)
+  }, [])
+
+  const profileUpdater = useCallback(
+    (updater: Parameters<typeof updateProfile>[1]) => updateProfile(activeProfile.id, updater),
+    [activeProfile.id, updateProfile]
+  )
+
   useEffect(() => {
     const onOnline = () => setOnline(true)
     const onOffline = () => setOnline(false)
@@ -74,6 +84,42 @@ export default function App() {
   }, [activeProfile.id, controller, obsState.connectedProfileId, reportError])
 
   useEffect(() => {
+    if (obsState.connectionStatus !== 'connected' || obsState.scenes.length === 0) return
+    const sceneNames = new Set(obsState.scenes.map((scene) => scene.name))
+    const savedScene = activeProfile.selectedSourceScene ?? ''
+    const selectedScene = sceneNames.has(savedScene)
+      ? savedScene
+      : sceneNames.has(obsState.currentProgramScene)
+        ? obsState.currentProgramScene
+        : obsState.scenes[0].name
+
+    if (savedScene !== selectedScene) {
+      profileUpdater((current) => ({ ...current, selectedSourceScene: selectedScene }))
+    }
+    if (obsState.sourceSceneName !== selectedScene) {
+      void controller.refreshSources(selectedScene).catch(reportError)
+    }
+  }, [
+    activeProfile.selectedSourceScene,
+    controller,
+    obsState.connectionStatus,
+    obsState.currentProgramScene,
+    obsState.scenes,
+    obsState.sourceSceneName,
+    profileUpdater,
+    reportError
+  ])
+
+  useEffect(() => {
+    if (obsState.connectionStatus !== 'connected') return
+    const audioInputs = obsState.inputs.filter((input) => input.isAudio)
+    if (audioInputs.length === 0) return
+    const savedInput = activeProfile.selectedAudioInput ?? ''
+    if (audioInputs.some((input) => input.name === savedInput)) return
+    profileUpdater((current) => ({ ...current, selectedAudioInput: audioInputs[0].name }))
+  }, [activeProfile.selectedAudioInput, obsState.connectionStatus, obsState.inputs, profileUpdater])
+
+  useEffect(() => {
     if (!notice) return
     const timer = window.setTimeout(() => setNotice(null), 5_000)
     return () => window.clearTimeout(timer)
@@ -87,13 +133,13 @@ export default function App() {
     if (!mockMode) {
       if (!activeProfile.url) {
         setNotice('接続・同期設定でWSS接続先を入力してください。')
-        setTab('settings')
+        selectTab('settings')
         return
       }
       const validation = validateObsUrl(activeProfile.url)
       if (validation) {
         setNotice(validation)
-        setTab('settings')
+        selectTab('settings')
         return
       }
     }
@@ -106,9 +152,6 @@ export default function App() {
 
   const connected = obsState.connectionStatus === 'connected'
   const busy = obsState.connectionStatus === 'connecting' || obsState.connectionStatus === 'reconnecting'
-  const profileUpdater = (updater: Parameters<typeof updateProfile>[1]) =>
-    updateProfile(activeProfile.id, updater)
-
   return (
     <div className="app-shell">
       <a className="skip-link" href="#main-content">本文へ移動</a>
@@ -141,7 +184,7 @@ export default function App() {
       {mockMode && <div className="global-banner mock-banner">モックモード — 実際のOBSには接続していません</div>}
       {!online && <div className="global-banner offline-banner">オフライン — ローカル設定は利用できますがOBS接続と同期はできません</div>}
       {obsState.connectionError && (
-        <button className="global-banner error-banner" onClick={() => setTab('settings')}>
+        <button className="global-banner error-banner" onClick={() => selectTab('settings')}>
           {obsState.connectionError} <u>接続診断を開く</u>
         </button>
       )}
@@ -182,7 +225,15 @@ export default function App() {
             reportError={reportError}
           />
         )}
-        {tab === 'sources' && <SourcesTab obsState={obsState} controller={controller} reportError={reportError} />}
+        {tab === 'sources' && (
+          <SourcesTab
+            profile={activeProfile}
+            obsState={obsState}
+            controller={controller}
+            updateProfile={profileUpdater}
+            reportError={reportError}
+          />
+        )}
         {tab === 'audio' && (
           <AudioTab
             profile={activeProfile}
@@ -222,7 +273,7 @@ export default function App() {
             key={item.id}
             className={tab === item.id ? 'active' : ''}
             aria-current={tab === item.id ? 'page' : undefined}
-            onClick={() => setTab(item.id)}
+            onClick={() => selectTab(item.id)}
           >
             <span aria-hidden="true">{item.icon}</span>
             <small>{item.label}</small>

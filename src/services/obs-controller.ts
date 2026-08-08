@@ -18,7 +18,8 @@ export interface ObsController {
   disconnect(): Promise<void>
   refreshAll(): Promise<void>
   refreshScenes(): Promise<void>
-  refreshSources(): Promise<void>
+  refreshSources(sceneName?: string): Promise<void>
+  refreshInputs(): Promise<void>
   setCurrentScene(sceneName: string): Promise<void>
   setPreviewScene(sceneName: string): Promise<void>
   setSourceEnabled(source: SourceInfo, enabled: boolean): Promise<void>
@@ -119,6 +120,7 @@ export class RealObsController implements ObsController {
   private reconnectAttempt = 0
   private manualDisconnect = false
   private connectionGeneration = 0
+  private sourceRefreshGeneration = 0
 
   constructor() {
     this.bindEventsOnce()
@@ -150,12 +152,21 @@ export class RealObsController implements ObsController {
     })
     this.obs.on('CurrentProgramSceneChanged', ({ sceneName }) => {
       this.emit({ currentProgramScene: sceneName })
-      void this.refreshSources()
     })
     this.obs.on('CurrentPreviewSceneChanged', ({ sceneName }) => {
       this.emit({ currentPreviewScene: sceneName })
     })
-    this.obs.on('SceneListChanged', () => void this.refreshScenes())
+    const refreshSceneState = () => void this.refreshScenes().catch(() => undefined)
+    this.obs.on('SceneListChanged', refreshSceneState)
+    this.obs.on('SceneNameChanged', refreshSceneState)
+    const refreshTrackedSources = ({ sceneName }: { sceneName: string }) => {
+      if (this.isTrackedSourceScene(sceneName)) {
+        void this.refreshSources(this.state.sourceSceneName).catch(() => undefined)
+      }
+    }
+    this.obs.on('SceneItemCreated', refreshTrackedSources)
+    this.obs.on('SceneItemRemoved', refreshTrackedSources)
+    this.obs.on('SceneItemListReindexed', refreshTrackedSources)
     this.obs.on('SceneItemEnableStateChanged', ({ sceneName, sceneItemId, sceneItemEnabled }) => {
       this.emit({
         sources: this.state.sources.map((source) =>
@@ -170,6 +181,13 @@ export class RealObsController implements ObsController {
     })
     this.obs.on('InputVolumeChanged', ({ inputName, inputVolumeDb }) => {
       this.updateInput(inputName, { volumeDb: inputVolumeDb })
+    })
+    const refreshInputState = () => void this.refreshInputs().catch(() => undefined)
+    this.obs.on('InputCreated', refreshInputState)
+    this.obs.on('InputRemoved', refreshInputState)
+    this.obs.on('InputNameChanged', () => {
+      refreshInputState()
+      void this.refreshSources(this.state.sourceSceneName).catch(() => undefined)
     })
     this.obs.on('StreamStateChanged', ({ outputActive }) => {
       this.updateOutputs({ streamActive: outputActive })
@@ -211,6 +229,13 @@ export class RealObsController implements ObsController {
         input.name === inputName ? { ...input, ...patch } : input
       )
     })
+  }
+
+  private isTrackedSourceScene(sceneName: string) {
+    return (
+      sceneName === this.state.sourceSceneName ||
+      this.state.sources.some((source) => source.isGroup && source.sourceName === sceneName)
+    )
   }
 
   private updateOutputs(patch: Partial<OutputState>) {
@@ -258,6 +283,7 @@ export class RealObsController implements ObsController {
   async disconnect() {
     this.manualDisconnect = true
     this.connectionGeneration += 1
+    this.sourceRefreshGeneration += 1
     this.clearReconnect()
     try {
       await this.obs.disconnect()
@@ -297,22 +323,37 @@ export class RealObsController implements ObsController {
 
   async refreshScenes() {
     const response = await this.obs.call('GetSceneList')
+    const scenes = response.scenes
+      .map((scene) => ({
+        name: jsonString(scene.sceneName),
+        uuid: jsonString(scene.sceneUuid) || undefined
+      }))
+      .filter((scene) => scene.name.length > 0)
+    const sceneNames = new Set(scenes.map((scene) => scene.name))
+    const selectedScene = sceneNames.has(this.state.sourceSceneName)
+      ? this.state.sourceSceneName
+      : sceneNames.has(this.profile?.selectedSourceScene ?? '')
+        ? (this.profile?.selectedSourceScene ?? '')
+        : sceneNames.has(response.currentProgramSceneName)
+          ? response.currentProgramSceneName
+          : (scenes[0]?.name ?? '')
     this.emit({
-      scenes: response.scenes
-        .map((scene) => ({
-          name: jsonString(scene.sceneName),
-          uuid: jsonString(scene.sceneUuid) || undefined
-        }))
-        .filter((scene) => scene.name.length > 0),
+      scenes,
       currentProgramScene: response.currentProgramSceneName,
       currentPreviewScene: response.currentPreviewSceneName ?? this.state.currentPreviewScene
     })
-    await this.refreshSources()
+    await this.refreshSources(selectedScene)
   }
 
-  async refreshSources() {
-    const sceneName = this.state.currentProgramScene
-    if (!sceneName) return
+  async refreshSources(sceneName = this.state.sourceSceneName || this.state.currentProgramScene) {
+    const generation = ++this.sourceRefreshGeneration
+    if (!sceneName) {
+      this.emit({ sourceSceneName: '', sources: [] })
+      return
+    }
+    if (sceneName !== this.state.sourceSceneName) {
+      this.emit({ sourceSceneName: sceneName, sources: [] })
+    }
     const response = await this.obs.call('GetSceneItemList', { sceneName })
     const sources: SourceInfo[] = response.sceneItems.map((item) => ({
       sceneName,
@@ -343,10 +384,12 @@ export class RealObsController implements ObsController {
         // Group support differs across OBS/source combinations; top-level items stay usable.
       }
     }
-    this.emit({ sources })
+    if (generation === this.sourceRefreshGeneration) {
+      this.emit({ sourceSceneName: sceneName, sources })
+    }
   }
 
-  private async refreshInputs() {
+  async refreshInputs() {
     const response = await this.obs.call('GetInputList')
     const inputs: InputInfo[] = []
     for (const item of response.inputs) {

@@ -1,6 +1,13 @@
 [CmdletBinding(SupportsShouldProcess = $true)]
 param()
 
+# Keep native CLI JSON as UTF-8 in Windows PowerShell 5.1. These assignments are
+# also supported by PowerShell 7 and avoid changing any Tailscale configuration.
+$Utf8 = New-Object System.Text.UTF8Encoding($false)
+[Console]::InputEncoding = $Utf8
+[Console]::OutputEncoding = $Utf8
+$OutputEncoding = $Utf8
+
 $ErrorActionPreference = 'Stop'
 $ObsAddress = '127.0.0.1'
 $ObsPort = 4455

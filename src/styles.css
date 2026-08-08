@@ -334,6 +334,18 @@ label small, article small, .section-heading p, .status-message { color: var(--m
 
 .stack-list { display: grid; gap: .65rem; }
 
+.target-selector {
+  display: grid;
+  gap: .45rem;
+  margin-bottom: .9rem;
+  padding: .8rem;
+  background: #0d121b;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.target-selector > small { color: var(--muted); }
+
 .list-card, .audio-card, .output-card {
   background: #101721;
   border: 1px solid var(--border);
@@ -419,6 +431,7 @@ label small, article small, .section-heading p, .status-message { color: var(--m
 .toggle-row input:checked::after { transform: translateX(20px); background: white; }
 
 .audio-card { padding: .9rem; }
+.selected-audio-control .audio-card { border-color: color-mix(in srgb, var(--accent) 55%, var(--border)); }
 .audio-heading { justify-content: space-between; gap: .7rem; }
 .audio-heading > div { display: grid; gap: .2rem; }
 .volume-slider { width: 100%; height: 44px; accent-color: var(--accent); }
