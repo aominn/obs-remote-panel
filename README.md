@@ -54,6 +54,22 @@ OBS Studio 32.2.1を想定しています。`ツール → WebSocketサーバー
 
 OBS側Windows PCでTailscaleにログインし、[OBS/Tailscale設定手順](docs/SETUP_OBS_TAILSCALE.md)に従います。支援スクリプトはOBSの待受と既存Serve設定を確認し、競合がない場合だけ`127.0.0.1:4455`へのHTTPS reverse proxyを追加します。Funnelや無条件の`serve reset`は使いません。
 
+### Windowsの簡単セットアップ
+
+1. OBSを起動し、WebSocketサーバーを有効にする
+2. Tailscaleへ接続する
+3. ZIPを展開したフォルダーにある`setup-windows.cmd`をダブルクリックする
+4. 表示されたWSS URLをOBS Remote Panelへ登録する
+5. 設定後は、PCを起動するたびに`setup-windows.cmd`を実行する必要はない
+
+成功すると、リポジトリ直下の`obs-remote-panel-connection.txt`にもPC名、WSS URL、更新日時、再確認方法が保存されます。このメモにはOBS WebSocketのパスワードやTailscaleの認証情報を保存しません。WSS URLを後から確認したい場合はこのメモを開くか、`tailscale serve status`を実行します。`setup-windows.cmd`を再実行すると、現在のWSS URLでメモが更新されます。
+
+PowerShellから手動で実行する場合は、リポジトリのルートで次を実行します。これはダブルクリックで起動できない場合の代替手順です。
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\scripts\setup-tailscale-serve.ps1"
+```
+
 ## 6. スマートフォンから接続
 
 スマートフォンをOBS側PCと同じtailnetへ参加させ、Pagesを開きます。「接続・同期設定」にスクリプトが表示した`wss://<端末名>.<tailnet>.ts.net/`とOBSパスワードを入力し、「接続」を押します。

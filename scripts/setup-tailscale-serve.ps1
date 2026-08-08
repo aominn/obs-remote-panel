@@ -13,10 +13,48 @@ $ObsAddress = '127.0.0.1'
 $ObsPort = 4455
 $HttpsPort = 443
 $ProxyTarget = "http://${ObsAddress}:$ObsPort"
+$RepositoryRoot = Split-Path -Parent $PSScriptRoot
+$ConnectionMemoPath = Join-Path $RepositoryRoot 'obs-remote-panel-connection.txt'
 
 function Stop-WithMessage([string]$Message) {
     Write-Error $Message
     exit 1
+}
+
+function Write-ConnectionMemo([string]$WssUrl) {
+    $TempMemoPath = Join-Path $RepositoryRoot ".obs-remote-panel-connection.$PID.tmp"
+    $UpdatedAt = Get-Date -Format 'yyyy-MM-dd HH:mm:ss zzz'
+    [string[]]$MemoLines = @(
+        'OBS Remote Panel connection'
+        ''
+        "PC name: $([Environment]::MachineName)"
+        "WSS URL: $WssUrl"
+        "Updated: $UpdatedAt"
+        ''
+        'How to check again:'
+        '  tailscale serve status'
+        '  Run setup-windows.cmd again to refresh this file.'
+        ''
+        'This setup does not need to run every time the PC starts.'
+        'OBS WebSocket passwords and Tailscale credentials are not stored here.'
+    )
+
+    try {
+        [System.IO.File]::WriteAllLines($TempMemoPath, $MemoLines, $Utf8)
+        if ([System.IO.File]::Exists($ConnectionMemoPath)) {
+            [System.IO.File]::Replace($TempMemoPath, $ConnectionMemoPath, $null)
+        }
+        else {
+            [System.IO.File]::Move($TempMemoPath, $ConnectionMemoPath)
+        }
+        Write-Host "Connection memo saved: $ConnectionMemoPath" -ForegroundColor Green
+    }
+    catch {
+        if ([System.IO.File]::Exists($TempMemoPath)) {
+            [System.IO.File]::Delete($TempMemoPath)
+        }
+        Stop-WithMessage "The Serve setup completed, but the connection memo could not be saved: $($_.Exception.Message)"
+    }
 }
 
 Write-Host '1/7 Checking the Tailscale CLI...'
@@ -51,6 +89,7 @@ $ServeStatusText = [string]$ServeStatusJson
 
 $TargetAlreadyConfigured = $ServeStatusText -match [regex]::Escape($ProxyTarget)
 $HttpsAlreadyUsed = ($ServeStatusText -match '443') -or ($ServeStatusText -match 'HTTPS')
+$ServeReady = $TargetAlreadyConfigured
 
 Write-Host '5/7 Checking for configuration conflicts...'
 if ($TargetAlreadyConfigured) {
@@ -66,6 +105,7 @@ else {
         if ($LASTEXITCODE -ne 0) {
             Stop-WithMessage 'Tailscale Serve setup failed. Review the Tailscale error above.'
         }
+        $ServeReady = $true
         Write-Host "Changed: HTTPS $HttpsPort now proxies to $ProxyTarget." -ForegroundColor Green
     }
 }
@@ -76,8 +116,15 @@ Write-Host '7/7 Showing Serve status and connection URLs...'
 $DnsName = [string]$TailscaleStatus.Self.DNSName
 $DnsName = $DnsName.TrimEnd('.')
 if ($DnsName) {
+    $WssUrl = "wss://$DnsName/"
     Write-Host "Browser HTTPS URL: https://$DnsName/" -ForegroundColor Cyan
-    Write-Host "WSS URL for OBS Remote Panel: wss://$DnsName/" -ForegroundColor Cyan
+    Write-Host "WSS URL for OBS Remote Panel: $WssUrl" -ForegroundColor Cyan
+    if ($ServeReady) {
+        Write-ConnectionMemo -WssUrl $WssUrl
+    }
+    else {
+        Write-Warning 'The Serve change was not applied. The connection memo was not updated.'
+    }
 }
 else {
     Write-Warning 'The MagicDNS name was unavailable. Use the HTTPS hostname from tailscale serve status with a wss:// scheme.'
