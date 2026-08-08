@@ -38,6 +38,14 @@ describe('ローカル設定', () => {
     expect(importSettings(json).profiles[0].password).toBe('')
   })
 
+  it('既存schemaVersionの設定へ操作対象を後方互換で追加できる', () => {
+    const settings = createDefaultSettings()
+    delete settings.profiles[0].selectedSourceScene
+    delete settings.profiles[0].selectedAudioInput
+    const loaded = loadSettings({ getItem: () => JSON.stringify(settings) })
+    expect(loaded.profiles[0].id).toBe(settings.profiles[0].id)
+  })
+
   it('本番接続先はWSSだけを受理する', () => {
     expect(validateObsUrl('wss://obs.example.ts.net/', false)).toBeNull()
     expect(validateObsUrl('ws://100.64.0.1:4455', false)).toContain('wss://')

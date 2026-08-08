@@ -21,6 +21,8 @@ export function createProfile(name = '自宅OBS'): ConnectionProfile {
     password: '',
     autoReconnect: true,
     selectedSlideshowInput: '',
+    selectedSourceScene: '',
+    selectedAudioInput: '',
     favoriteScenes: [],
     favoriteAudioInputs: [],
     sceneOrder: [],
@@ -96,6 +98,8 @@ function isProfile(value: unknown): value is ConnectionProfile {
     typeof value.password === 'string' &&
     typeof value.autoReconnect === 'boolean' &&
     typeof value.selectedSlideshowInput === 'string' &&
+    (value.selectedSourceScene === undefined || typeof value.selectedSourceScene === 'string') &&
+    (value.selectedAudioInput === undefined || typeof value.selectedAudioInput === 'string') &&
     isStringArray(value.favoriteScenes) &&
     isStringArray(value.favoriteAudioInputs) &&
     isStringArray(value.sceneOrder) &&

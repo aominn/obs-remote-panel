@@ -37,4 +37,49 @@ describe('モックOBS', () => {
     expect(listener).toHaveBeenCalled()
     unsubscribe()
   })
+
+  it('ソース操作シーンをプログラムとは独立して維持する', async () => {
+    const controller = new MockObsController()
+    await controller.connect(createProfile())
+
+    await controller.refreshSources('資料共有')
+    expect(controller.getState()).toMatchObject({
+      currentProgramScene: 'メインカメラ',
+      sourceSceneName: '資料共有'
+    })
+    expect(controller.getState().sources.map((source) => source.sourceName)).toEqual([
+      'スライド資料',
+      'レーザーポインター'
+    ])
+
+    const pointer = controller.getState().sources.find(
+      (source) => source.sourceName === 'レーザーポインター'
+    )
+    expect(pointer).toBeDefined()
+    await controller.setSourceEnabled(pointer!, true)
+    await controller.refreshSources('休憩中')
+    await controller.refreshSources('資料共有')
+
+    expect(
+      controller.getState().sources.find((source) => source.sourceName === 'レーザーポインター')
+    ).toMatchObject({ enabled: true })
+    expect(controller.getState().currentProgramScene).toBe('メインカメラ')
+  })
+
+  it('選択した音声入力だけを操作する', async () => {
+    const controller = new MockObsController()
+    await controller.connect(createProfile())
+
+    await controller.setInputMuted('BGM', false)
+    await controller.setInputVolume('BGM', -18.5)
+
+    expect(controller.getState().inputs.find((input) => input.name === 'BGM')).toMatchObject({
+      muted: false,
+      volumeDb: -18.5
+    })
+    expect(controller.getState().inputs.find((input) => input.name === 'マイク')).toMatchObject({
+      muted: false,
+      volumeDb: -8
+    })
+  })
 })

@@ -33,6 +33,8 @@ export interface ConnectionProfile {
   password: string
   autoReconnect: boolean
   selectedSlideshowInput: string
+  selectedSourceScene?: string
+  selectedAudioInput?: string
   favoriteScenes: string[]
   favoriteAudioInputs: string[]
   sceneOrder: string[]
@@ -109,6 +111,7 @@ export interface ObsState {
   scenes: SceneInfo[]
   currentProgramScene: string
   currentPreviewScene: string
+  sourceSceneName: string
   sources: SourceInfo[]
   inputs: InputInfo[]
   studioMode: boolean
@@ -127,6 +130,7 @@ export const EMPTY_OBS_STATE: ObsState = {
   scenes: [],
   currentProgramScene: '',
   currentPreviewScene: '',
+  sourceSceneName: '',
   sources: [],
   inputs: [],
   studioMode: false,

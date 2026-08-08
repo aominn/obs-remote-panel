@@ -4,17 +4,24 @@ import type { ObsController } from './obs-controller'
 
 type Listener = (state: ObsState) => void
 
-const initialMockState = (): ObsState => ({
-  ...structuredClone(EMPTY_OBS_STATE),
-  scenes: [
-    { name: 'オープニング' },
-    { name: 'メインカメラ' },
-    { name: '資料共有' },
-    { name: '休憩中' }
+const initialMockSources = (): Record<string, SourceInfo[]> => ({
+  オープニング: [
+    {
+      sceneName: 'オープニング',
+      sceneItemId: 101,
+      sourceName: 'タイトルロゴ',
+      enabled: true,
+      isGroup: false
+    },
+    {
+      sceneName: 'オープニング',
+      sceneItemId: 102,
+      sourceName: 'オープニング動画',
+      enabled: true,
+      isGroup: false
+    }
   ],
-  currentProgramScene: 'メインカメラ',
-  currentPreviewScene: '資料共有',
-  sources: [
+  メインカメラ: [
     {
       sceneName: 'メインカメラ',
       sceneItemId: 1,
@@ -45,6 +52,54 @@ const initialMockState = (): ObsState => ({
       parentGroupName: 'テロップグループ'
     }
   ],
+  資料共有: [
+    {
+      sceneName: '資料共有',
+      sceneItemId: 201,
+      sourceName: 'スライド資料',
+      enabled: true,
+      isGroup: false
+    },
+    {
+      sceneName: '資料共有',
+      sceneItemId: 202,
+      sourceName: 'レーザーポインター',
+      enabled: false,
+      isGroup: false
+    }
+  ],
+  休憩中: [
+    {
+      sceneName: '休憩中',
+      sceneItemId: 301,
+      sourceName: '休憩背景',
+      enabled: true,
+      isGroup: false
+    },
+    {
+      sceneName: '休憩中',
+      sceneItemId: 302,
+      sourceName: '休憩BGM',
+      enabled: true,
+      isGroup: false
+    }
+  ]
+})
+
+const cloneSources = (sources: SourceInfo[]) => sources.map((source) => ({ ...source }))
+
+const initialMockState = (sourcesByScene: Record<string, SourceInfo[]>): ObsState => ({
+  ...structuredClone(EMPTY_OBS_STATE),
+  scenes: [
+    { name: 'オープニング' },
+    { name: 'メインカメラ' },
+    { name: '資料共有' },
+    { name: '休憩中' }
+  ],
+  currentProgramScene: 'メインカメラ',
+  currentPreviewScene: '資料共有',
+  sourceSceneName: 'メインカメラ',
+  sources: cloneSources(sourcesByScene['メインカメラ']),
   inputs: [
     {
       name: '画像スライドショー',
@@ -73,7 +128,8 @@ const initialMockState = (): ObsState => ({
 })
 
 export class MockObsController implements ObsController {
-  private state = initialMockState()
+  private readonly sourcesByScene = initialMockSources()
+  private state = initialMockState(this.sourcesByScene)
   private readonly listeners = new Set<Listener>()
   private profile: ConnectionProfile | null = null
   private shouldFailNext = false
@@ -139,9 +195,17 @@ export class MockObsController implements ObsController {
     this.shouldFailNext = true
   }
 
-  async refreshAll() {}
+  async refreshAll() {
+    await this.refreshSources()
+  }
   async refreshScenes() {}
-  async refreshSources() {}
+  async refreshSources(sceneName = this.state.sourceSceneName || this.state.currentProgramScene) {
+    this.emit({
+      sourceSceneName: sceneName,
+      sources: cloneSources(this.sourcesByScene[sceneName] ?? [])
+    })
+  }
+  async refreshInputs() {}
 
   async setCurrentScene(sceneName: string) {
     this.emit({ currentProgramScene: sceneName })
@@ -152,6 +216,14 @@ export class MockObsController implements ObsController {
   }
 
   async setSourceEnabled(source: SourceInfo, enabled: boolean) {
+    for (const sources of Object.values(this.sourcesByScene)) {
+      const item = sources.find(
+        (candidate) =>
+          candidate.sceneName === source.sceneName &&
+          candidate.sceneItemId === source.sceneItemId
+      )
+      if (item) item.enabled = enabled
+    }
     this.emit({
       sources: this.state.sources.map((item) =>
         item.sceneName === source.sceneName && item.sceneItemId === source.sceneItemId
