@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="OBS Remote Panel">
+  <rect width="512" height="512" rx="112" fill="#0d1017"/>
+  <circle cx="256" cy="256" r="150" fill="none" stroke="#58d6a7" stroke-width="30"/>
+  <path d="M256 122a134 134 0 0 1 116 67l-74 43a49 49 0 0 0-42-24zm116 67a134 134 0 0 1 0 134l-74-43a49 49 0 0 0 0-48zm0 134a134 134 0 0 1-116 67v-86a49 49 0 0 0 42-24zM256 390a134 134 0 0 1-116-67l74-43a49 49 0 0 0 42 24zm-116-67a134 134 0 0 1 0-134l74 43a49 49 0 0 0 0 48zm0-134a134 134 0 0 1 116-67v86a49 49 0 0 0-42 24z" fill="#58d6a7" opacity=".88"/>
+  <circle cx="256" cy="256" r="43" fill="#f5f7fa"/>
+</svg>
