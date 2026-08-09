@@ -120,4 +120,37 @@ describe('OBS WebSocket v5リクエスト', () => {
       expect.objectContaining({ name: 'マイク', isAudio: true, monitorType: undefined })
     ])
   })
+
+  it('ミュート操作成功後にローカル状態を更新する', async () => {
+    const websocket = new FakeObsWebSocket()
+    const controller = new RealObsController(websocket as unknown as OBSWebSocket)
+    await controller.refreshInputs()
+
+    expect(controller.getState().inputs[0]).toMatchObject({ name: 'マイク', muted: false })
+
+    await controller.setInputMuted('マイク', true)
+
+    expect(websocket.call).toHaveBeenCalledWith('SetInputMute', {
+      inputName: 'マイク',
+      inputMuted: true
+    })
+    expect(controller.getState().inputs[0]).toMatchObject({ name: 'マイク', muted: true })
+  })
+
+  it('ミュート操作失敗時は例外を伝えてローカル状態を変更しない', async () => {
+    const websocket = new FakeObsWebSocket()
+    const defaultCall = websocket.call.getMockImplementation()!
+    const operationError = new Error('SetInputMute failed')
+    websocket.call.mockImplementation(async (requestType: string) => {
+      if (requestType === 'SetInputMute') throw operationError
+      return defaultCall(requestType)
+    })
+    const controller = new RealObsController(websocket as unknown as OBSWebSocket)
+    await controller.refreshInputs()
+
+    expect(controller.getState().inputs[0]).toMatchObject({ name: 'マイク', muted: false })
+
+    await expect(controller.setInputMuted('マイク', true)).rejects.toBe(operationError)
+    expect(controller.getState().inputs[0]).toMatchObject({ name: 'マイク', muted: false })
+  })
 })
