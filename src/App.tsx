@@ -10,6 +10,7 @@ import { useCloudSync } from './hooks/use-cloud-sync'
 import { useObs } from './hooks/use-obs'
 import { useSettings } from './hooks/use-settings'
 import { validateObsUrl } from './lib/settings'
+import { backfillSlideshowActionTargets } from './lib/slideshow'
 import { loadActiveTab, saveActiveTab } from './lib/view-state'
 import type { MainTabId } from './lib/view-state'
 import type { ConnectionStatus } from './types'
@@ -118,6 +119,13 @@ export default function App() {
     if (audioInputs.some((input) => input.name === savedInput)) return
     profileUpdater((current) => ({ ...current, selectedAudioInput: audioInputs[0].name }))
   }, [activeProfile.selectedAudioInput, obsState.connectionStatus, obsState.inputs, profileUpdater])
+
+  useEffect(() => {
+    if (obsState.connectionStatus !== 'connected') return
+    const next = backfillSlideshowActionTargets(activeProfile, obsState.inputs)
+    if (next === activeProfile) return
+    profileUpdater((current) => backfillSlideshowActionTargets(current, obsState.inputs))
+  }, [activeProfile, obsState.connectionStatus, obsState.inputs, profileUpdater])
 
   useEffect(() => {
     if (!notice) return
@@ -256,7 +264,6 @@ export default function App() {
           <SettingsTab
             settings={settings}
             profile={activeProfile}
-            obsState={obsState}
             cloud={cloud}
             updateSettings={updateSettings}
             updateProfile={profileUpdater}

@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import type { useCloudSync } from '../hooks/use-cloud-sync'
 import { createProfile, exportSettings, importSettings, validateObsUrl } from '../lib/settings'
-import type { AppSettings, ConnectionProfile, InputInfo, ObsState } from '../types'
+import type { AppSettings, ConnectionProfile } from '../types'
 import { Section, Toggle } from './ui'
 
 type CloudSync = ReturnType<typeof useCloudSync>
@@ -26,16 +26,9 @@ const DETAIL_ACTIONS = [
   ['stats', 'OBS統計']
 ] as const
 
-function slideshowCandidates(inputs: InputInfo[]) {
-  const likely = inputs.filter((input) => /slide|slideshow|image/i.test(`${input.kind} ${input.name}`))
-  const other = inputs.filter((input) => !likely.includes(input))
-  return { likely, other }
-}
-
 export function SettingsTab({
   settings,
   profile,
-  obsState,
   cloud,
   updateSettings,
   updateProfile,
@@ -45,7 +38,6 @@ export function SettingsTab({
 }: {
   settings: AppSettings
   profile: ConnectionProfile
-  obsState: ObsState
   cloud: CloudSync
   updateSettings: (updater: (settings: AppSettings) => AppSettings) => void
   updateProfile: (updater: (profile: ConnectionProfile) => ConnectionProfile) => void
@@ -56,7 +48,6 @@ export function SettingsTab({
   const [showPassword, setShowPassword] = useState(false)
   const [importMessage, setImportMessage] = useState('')
   const importRef = useRef<HTMLInputElement>(null)
-  const candidates = slideshowCandidates(obsState.inputs)
   const urlError = profile.url ? validateObsUrl(profile.url) : null
 
   const addProfile = () => {
@@ -148,27 +139,6 @@ export function SettingsTab({
         <button className="button danger-outline" disabled={settings.profiles.length === 1} onClick={removeProfile}>
           このプロファイルを削除
         </button>
-      </Section>
-
-      <Section
-        title="画像スライドショー"
-        description="番号はOBS WebSocketから正確に取得できないため表示しません（番号取得非対応）。"
-      >
-        <label>
-          操作対象の入力
-          <select
-            value={profile.selectedSlideshowInput}
-            onChange={(event) => updateProfile((current) => ({ ...current, selectedSlideshowInput: event.target.value }))}
-          >
-            <option value="">選択してください</option>
-            {candidates.likely.length > 0 && <optgroup label="候補（種類・名前から判定）">
-              {candidates.likely.map((input) => <option value={input.name} key={input.name}>{input.name} — {input.kind}</option>)}
-            </optgroup>}
-            {candidates.other.length > 0 && <optgroup label="すべての入力">
-              {candidates.other.map((input) => <option value={input.name} key={input.name}>{input.name} — {input.kind}</option>)}
-            </optgroup>}
-          </select>
-        </label>
       </Section>
 
       <Section title="詳細操作の表示" description="プロファイルごとに表示する操作を選べます。">

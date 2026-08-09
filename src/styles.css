@@ -299,6 +299,7 @@ label small, article small, .section-heading p, .status-message { color: var(--m
 }
 
 .quick-editor input:first-child { grid-column: 1 / -1; }
+.quick-editor select { grid-column: 1 / -1; }
 .quick-editor button { min-width: 44px; min-height: 44px; background: var(--surface-soft); border-radius: 8px; }
 .quick-editor .danger-text { color: #ff9da5; }
 
@@ -396,6 +397,9 @@ label small, article small, .section-heading p, .status-message { color: var(--m
 
 .source-card > div:first-child { display: grid; min-width: 0; gap: .25rem; }
 .source-card strong { overflow: hidden; text-overflow: ellipsis; }
+.source-actions { display: flex; align-items: center; gap: .65rem; }
+.source-slide-actions { display: flex; gap: .4rem; }
+.source-slide-actions .button { min-width: 56px; min-height: 44px; padding-inline: .65rem; }
 
 .toggle-row {
   display: flex;
@@ -435,6 +439,19 @@ label small, article small, .section-heading p, .status-message { color: var(--m
 .audio-heading { justify-content: space-between; gap: .7rem; }
 .audio-heading > div { display: grid; gap: .2rem; }
 .volume-slider { width: 100%; height: 44px; accent-color: var(--accent); }
+
+.monitoring-toggle {
+  width: 100%;
+  color: var(--text);
+  background: transparent;
+  border-color: var(--border);
+}
+
+.monitoring-toggle.active {
+  color: #07140f;
+  background: var(--accent);
+  border-color: var(--accent);
+}
 
 .favorite-button {
   min-height: 44px;
@@ -542,6 +559,11 @@ label small, article small, .section-heading p, .status-message { color: var(--m
   .main-content { padding: 1.35rem 1.35rem 7rem; }
   .quick-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .stats-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+}
+
+@media (max-width: 520px) {
+  .source-card { grid-template-columns: 1fr; }
+  .source-actions { justify-content: space-between; }
 }
 
 @media (max-width: 380px) {

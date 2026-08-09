@@ -73,6 +73,11 @@ export interface SourceInfo {
   parentGroupName?: string
 }
 
+export type InputAudioMonitorType =
+  | 'OBS_MONITORING_TYPE_NONE'
+  | 'OBS_MONITORING_TYPE_MONITOR_ONLY'
+  | 'OBS_MONITORING_TYPE_MONITOR_AND_OUTPUT'
+
 export interface InputInfo {
   name: string
   uuid?: string
@@ -80,6 +85,7 @@ export interface InputInfo {
   muted: boolean
   volumeDb: number
   isAudio: boolean
+  monitorType?: InputAudioMonitorType
 }
 
 export interface OutputState {

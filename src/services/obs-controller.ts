@@ -1,6 +1,7 @@
 import { OBSWebSocket } from 'obs-websocket-js'
 import type {
   ConnectionProfile,
+  InputAudioMonitorType,
   InputInfo,
   ObsState,
   OutputState,
@@ -10,6 +11,11 @@ import { EMPTY_OBS_STATE } from '../types'
 
 type Listener = (state: ObsState) => void
 type SlideDirection = 'previous' | 'next'
+
+export const AUDIO_MONITOR_OFF: InputAudioMonitorType = 'OBS_MONITORING_TYPE_NONE'
+export const AUDIO_MONITOR_ON: InputAudioMonitorType =
+  'OBS_MONITORING_TYPE_MONITOR_AND_OUTPUT'
+export const AUDIO_MONITOR_ONLY: InputAudioMonitorType = 'OBS_MONITORING_TYPE_MONITOR_ONLY'
 
 export interface ObsController {
   getState(): ObsState
@@ -25,6 +31,7 @@ export interface ObsController {
   setSourceEnabled(source: SourceInfo, enabled: boolean): Promise<void>
   setInputMuted(inputName: string, muted: boolean): Promise<void>
   setInputVolume(inputName: string, volumeDb: number): Promise<void>
+  setInputAudioMonitoring(inputName: string, enabled: boolean): Promise<void>
   triggerSlide(inputName: string, direction: SlideDirection): Promise<void>
   toggleStream(): Promise<void>
   toggleRecord(): Promise<void>
@@ -60,6 +67,24 @@ export function sceneItemEnabledRequest(source: SourceInfo, enabled: boolean) {
 
 export function inputVolumeRequest(inputName: string, inputVolumeDb: number) {
   return { inputName, inputVolumeDb }
+}
+
+export function inputAudioMonitorRequest(inputName: string, enabled: boolean) {
+  return {
+    inputName,
+    monitorType: enabled ? AUDIO_MONITOR_ON : AUDIO_MONITOR_OFF
+  } as const
+}
+
+export function isInputAudioMonitoringOn(monitorType?: string) {
+  return monitorType === AUDIO_MONITOR_ON || monitorType === AUDIO_MONITOR_ONLY
+}
+
+function inputAudioMonitorType(value: unknown): InputAudioMonitorType | undefined {
+  if (value === AUDIO_MONITOR_OFF) return AUDIO_MONITOR_OFF
+  if (value === AUDIO_MONITOR_ONLY) return AUDIO_MONITOR_ONLY
+  if (value === AUDIO_MONITOR_ON) return AUDIO_MONITOR_ON
+  return undefined
 }
 
 function errorCode(error: unknown): number | undefined {
@@ -112,7 +137,7 @@ function withTimeout<T>(promise: Promise<T>, milliseconds: number): Promise<T> {
 }
 
 export class RealObsController implements ObsController {
-  private readonly obs = new OBSWebSocket()
+  private readonly obs: OBSWebSocket
   private readonly listeners = new Set<Listener>()
   private state: ObsState = structuredClone(EMPTY_OBS_STATE)
   private profile: ConnectionProfile | null = null
@@ -121,8 +146,10 @@ export class RealObsController implements ObsController {
   private manualDisconnect = false
   private connectionGeneration = 0
   private sourceRefreshGeneration = 0
+  private readonly monitoringUpdates = new Set<string>()
 
-  constructor() {
+  constructor(obs = new OBSWebSocket()) {
+    this.obs = obs
     this.bindEventsOnce()
   }
 
@@ -181,6 +208,9 @@ export class RealObsController implements ObsController {
     })
     this.obs.on('InputVolumeChanged', ({ inputName, inputVolumeDb }) => {
       this.updateInput(inputName, { volumeDb: inputVolumeDb })
+    })
+    this.obs.on('InputAudioMonitorTypeChanged', ({ inputName, monitorType }) => {
+      this.updateInput(inputName, { monitorType: inputAudioMonitorType(monitorType) })
     })
     const refreshInputState = () => void this.refreshInputs().catch(() => undefined)
     this.obs.on('InputCreated', refreshInputState)
@@ -398,6 +428,7 @@ export class RealObsController implements ObsController {
       let muted = false
       let volumeDb = 0
       let isAudio = false
+      let monitorType: InputAudioMonitorType | undefined
       try {
         const [mute, volume] = await Promise.all([
           this.obs.call('GetInputMute', { inputName }),
@@ -406,6 +437,12 @@ export class RealObsController implements ObsController {
         muted = mute.inputMuted
         volumeDb = volume.inputVolumeDb
         isAudio = true
+        try {
+          const monitor = await this.obs.call('GetInputAudioMonitorType', { inputName })
+          monitorType = inputAudioMonitorType(monitor.monitorType)
+        } catch {
+          // Monitoring may be unavailable even when mute and volume requests are supported.
+        }
       } catch {
         // Inputs without audio do not implement the audio requests.
       }
@@ -415,7 +452,8 @@ export class RealObsController implements ObsController {
         kind: jsonString(item.inputKind),
         muted,
         volumeDb,
-        isAudio
+        isAudio,
+        monitorType
       })
     }
     this.emit({ inputs })
@@ -493,6 +531,18 @@ export class RealObsController implements ObsController {
   async setInputVolume(inputName: string, volumeDb: number) {
     this.updateInput(inputName, { volumeDb })
     await this.obs.call('SetInputVolume', inputVolumeRequest(inputName, volumeDb))
+  }
+
+  async setInputAudioMonitoring(inputName: string, enabled: boolean) {
+    if (this.monitoringUpdates.has(inputName)) return
+    this.monitoringUpdates.add(inputName)
+    const request = inputAudioMonitorRequest(inputName, enabled)
+    try {
+      await this.obs.call('SetInputAudioMonitorType', request)
+      this.updateInput(inputName, { monitorType: request.monitorType })
+    } finally {
+      this.monitoringUpdates.delete(inputName)
+    }
   }
 
   async triggerSlide(inputName: string, direction: SlideDirection) {

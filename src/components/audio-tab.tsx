@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import type { ObsController } from '../services/obs-controller'
+import {
+  isInputAudioMonitoringOn,
+  type ObsController
+} from '../services/obs-controller'
 import type { ConnectionProfile, ObsState } from '../types'
 import { EmptyState, Section } from './ui'
 
@@ -18,6 +21,7 @@ export function AudioTab({
 }) {
   const connected = obsState.connectionStatus === 'connected'
   const [volumes, setVolumes] = useState<Record<string, number>>({})
+  const [monitoringInput, setMonitoringInput] = useState<string | null>(null)
   const timers = useRef<Record<string, number>>({})
 
   useEffect(
@@ -46,6 +50,19 @@ export function AudioTab({
   const savedInput = profile.selectedAudioInput ?? ''
   const selectedInput =
     audioInputs.find((input) => input.name === savedInput) ?? audioInputs[0]
+  const monitoringOn = isInputAudioMonitoringOn(selectedInput?.monitorType)
+
+  const toggleMonitoring = async () => {
+    if (!selectedInput || monitoringInput === selectedInput.name) return
+    setMonitoringInput(selectedInput.name)
+    try {
+      await controller.setInputAudioMonitoring(selectedInput.name, !monitoringOn)
+    } catch (error) {
+      reportError(error)
+    } finally {
+      setMonitoringInput(null)
+    }
+  }
 
   return (
     <Section
@@ -107,6 +124,15 @@ export function AudioTab({
               value={volumes[selectedInput.name] ?? selectedInput.volumeDb}
               onInput={(event) => setVolume(selectedInput.name, Number(event.currentTarget.value))}
             />
+            <button
+              className={`button monitoring-toggle${monitoringOn ? ' active' : ''}`}
+              aria-pressed={monitoringOn}
+              aria-busy={monitoringInput === selectedInput.name}
+              disabled={!connected || monitoringInput === selectedInput.name}
+              onClick={() => void toggleMonitoring()}
+            >
+              {monitoringOn ? 'モニタリング ON' : 'モニタリング OFF'}
+            </button>
             <button
               className="favorite-button"
               onClick={() => updateProfile((current) => ({

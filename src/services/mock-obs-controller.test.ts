@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createProfile } from '../lib/settings'
+import { AUDIO_MONITOR_OFF, AUDIO_MONITOR_ON } from './obs-controller'
 import { MockObsController } from './mock-obs-controller'
 
 describe('モックOBS', () => {
@@ -12,6 +13,7 @@ describe('モックOBS', () => {
     await controller.setCurrentScene('資料共有')
     await controller.setInputMuted('マイク', true)
     await controller.setInputVolume('マイク', -20)
+    await controller.setInputAudioMonitoring('マイク', true)
     await controller.toggleStream()
     await controller.toggleRecord()
     await controller.toggleVirtualCamera()
@@ -24,7 +26,8 @@ describe('モックOBS', () => {
     expect(state.currentProgramScene).toBe('資料共有')
     expect(state.inputs.find((input) => input.name === 'マイク')).toMatchObject({
       muted: true,
-      volumeDb: -20
+      volumeDb: -20,
+      monitorType: AUDIO_MONITOR_ON
     })
     expect(state.outputs).toMatchObject({
       streamActive: true,
@@ -48,8 +51,9 @@ describe('モックOBS', () => {
       sourceSceneName: '資料共有'
     })
     expect(controller.getState().sources.map((source) => source.sourceName)).toEqual([
-      'スライド資料',
-      'レーザーポインター'
+      '資料スライドショー',
+      'レーザーポインター',
+      'スライド背景画像'
     ])
 
     const pointer = controller.getState().sources.find(
@@ -72,10 +76,12 @@ describe('モックOBS', () => {
 
     await controller.setInputMuted('BGM', false)
     await controller.setInputVolume('BGM', -18.5)
+    await controller.setInputAudioMonitoring('BGM', false)
 
     expect(controller.getState().inputs.find((input) => input.name === 'BGM')).toMatchObject({
       muted: false,
-      volumeDb: -18.5
+      volumeDb: -18.5,
+      monitorType: AUDIO_MONITOR_OFF
     })
     expect(controller.getState().inputs.find((input) => input.name === 'マイク')).toMatchObject({
       muted: false,
