@@ -1,6 +1,11 @@
 import type { ConnectionProfile, ObsState, SourceInfo } from '../types'
 import { EMPTY_OBS_STATE } from '../types'
-import type { ObsController } from './obs-controller'
+import {
+  AUDIO_MONITOR_OFF,
+  AUDIO_MONITOR_ON,
+  AUDIO_MONITOR_ONLY,
+  type ObsController
+} from './obs-controller'
 
 type Listener = (state: ObsState) => void
 
@@ -50,13 +55,21 @@ const initialMockSources = (): Record<string, SourceInfo[]> => ({
       enabled: true,
       isGroup: false,
       parentGroupName: 'テロップグループ'
+    },
+    {
+      sceneName: 'テロップグループ',
+      sceneItemId: 32,
+      sourceName: 'グループ内スライド',
+      enabled: true,
+      isGroup: false,
+      parentGroupName: 'テロップグループ'
     }
   ],
   資料共有: [
     {
       sceneName: '資料共有',
       sceneItemId: 201,
-      sourceName: 'スライド資料',
+      sourceName: '資料スライドショー',
       enabled: true,
       isGroup: false
     },
@@ -65,6 +78,13 @@ const initialMockSources = (): Record<string, SourceInfo[]> => ({
       sceneItemId: 202,
       sourceName: 'レーザーポインター',
       enabled: false,
+      isGroup: false
+    },
+    {
+      sceneName: '資料共有',
+      sceneItemId: 203,
+      sourceName: 'スライド背景画像',
+      enabled: true,
       isGroup: false
     }
   ],
@@ -108,9 +128,51 @@ const initialMockState = (sourcesByScene: Record<string, SourceInfo[]>): ObsStat
       volumeDb: -12,
       isAudio: false
     },
-    { name: 'マイク', kind: 'wasapi_input_capture', muted: false, volumeDb: -8, isAudio: true },
-    { name: 'デスクトップ音声', kind: 'wasapi_output_capture', muted: false, volumeDb: -15, isAudio: true },
-    { name: 'BGM', kind: 'ffmpeg_source', muted: true, volumeDb: -21, isAudio: true }
+    {
+      name: '資料スライドショー',
+      kind: 'slideshow_v2',
+      muted: false,
+      volumeDb: 0,
+      isAudio: false
+    },
+    {
+      name: 'グループ内スライド',
+      kind: 'slideshow_v2',
+      muted: false,
+      volumeDb: 0,
+      isAudio: false
+    },
+    {
+      name: 'スライド背景画像',
+      kind: 'image_source',
+      muted: false,
+      volumeDb: 0,
+      isAudio: false
+    },
+    {
+      name: 'マイク',
+      kind: 'wasapi_input_capture',
+      muted: false,
+      volumeDb: -8,
+      isAudio: true,
+      monitorType: AUDIO_MONITOR_OFF
+    },
+    {
+      name: 'デスクトップ音声',
+      kind: 'wasapi_output_capture',
+      muted: false,
+      volumeDb: -15,
+      isAudio: true,
+      monitorType: AUDIO_MONITOR_ONLY
+    },
+    {
+      name: 'BGM',
+      kind: 'ffmpeg_source',
+      muted: true,
+      volumeDb: -21,
+      isAudio: true,
+      monitorType: AUDIO_MONITOR_ON
+    }
   ],
   transitions: [
     { name: 'フェード', configurable: false, fixed: false },
@@ -245,6 +307,16 @@ export class MockObsController implements ObsController {
     this.emit({
       inputs: this.state.inputs.map((input) =>
         input.name === inputName ? { ...input, volumeDb } : input
+      )
+    })
+  }
+
+  async setInputAudioMonitoring(inputName: string, enabled: boolean) {
+    this.emit({
+      inputs: this.state.inputs.map((input) =>
+        input.name === inputName
+          ? { ...input, monitorType: enabled ? AUDIO_MONITOR_ON : AUDIO_MONITOR_OFF }
+          : input
       )
     })
   }

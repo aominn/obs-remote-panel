@@ -1,4 +1,5 @@
 import type { ObsController } from '../services/obs-controller'
+import { slideshowInputs } from '../lib/slideshow'
 import type { ConnectionProfile, ObsState } from '../types'
 import { EmptyState, Section, Toggle } from './ui'
 
@@ -22,6 +23,7 @@ export function SourcesTab({
     : obsState.sourceSceneName || obsState.currentProgramScene || obsState.scenes[0]?.name || ''
   const visibleSources =
     obsState.sourceSceneName === selectedScene ? obsState.sources : []
+  const slideshowNames = new Set(slideshowInputs(obsState.inputs).map((input) => input.name))
 
   const selectScene = (sceneName: string) => {
     updateProfile((current) => ({ ...current, selectedSourceScene: sceneName }))
@@ -59,23 +61,47 @@ export function SourcesTab({
         <small>選択中: {selectedScene || '未選択'}</small>
       </div>
       <div className="stack-list">
-        {visibleSources.map((source) => (
-          <article className="list-card source-card" key={`${source.sceneName}:${source.sceneItemId}`}>
+        {visibleSources.map((source) => {
+          const isSlideshow = slideshowNames.has(source.sourceName)
+          return <article className="list-card source-card" key={`${source.sceneName}:${source.sceneItemId}`}>
             <div>
               <strong>{source.parentGroupName ? `↳ ${source.sourceName}` : source.sourceName}</strong>
               <small>
                 {source.isGroup ? 'グループ' : source.parentGroupName ? `${source.parentGroupName} 内` : 'ソース'} · ID {source.sceneItemId}
               </small>
             </div>
-            <Toggle
-              label={source.enabled ? '表示中' : '非表示'}
-              checked={source.enabled}
-              disabled={!connected}
-              onChange={(enabled) => void controller.setSourceEnabled(source, enabled).catch(reportError)}
-            />
+            <div className="source-actions">
+              {isSlideshow && (
+                <div className="source-slide-actions">
+                  <button
+                    className="button secondary"
+                    aria-label={`${source.sourceName}を前へ`}
+                    disabled={!connected}
+                    onClick={() => void controller.triggerSlide(source.sourceName, 'previous').catch(reportError)}
+                  >
+                    前へ
+                  </button>
+                  <button
+                    className="button secondary"
+                    aria-label={`${source.sourceName}を次へ`}
+                    disabled={!connected}
+                    onClick={() => void controller.triggerSlide(source.sourceName, 'next').catch(reportError)}
+                  >
+                    次へ
+                  </button>
+                </div>
+              )}
+              <Toggle
+                label={source.enabled ? '表示中' : '非表示'}
+                checked={source.enabled}
+                disabled={!connected}
+                onChange={(enabled) => void controller.setSourceEnabled(source, enabled).catch(reportError)}
+              />
+            </div>
           </article>
-        ))}
+        })}
       </div>
+      {obsState.lastAction && <p className="status-message" role="status">実行: {obsState.lastAction}</p>}
       {visibleSources.length === 0 && (
         <EmptyState>
           {!connected || !selectedScene
