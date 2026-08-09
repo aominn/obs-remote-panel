@@ -524,8 +524,8 @@ export class RealObsController implements ObsController {
   }
 
   async setInputMuted(inputName: string, muted: boolean) {
-    this.updateInput(inputName, { muted })
     await this.obs.call('SetInputMute', { inputName, inputMuted: muted })
+    this.updateInput(inputName, { muted })
   }
 
   async setInputVolume(inputName: string, volumeDb: number) {
