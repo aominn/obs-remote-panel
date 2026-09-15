@@ -1,6 +1,8 @@
 import { useRef, useState } from 'react'
 import type { useCloudSync } from '../hooks/use-cloud-sync'
-import { createProfile, exportSettings, importSettings, validateObsUrl } from '../lib/settings'
+import { createProfile, exportSettings, validateObsUrl } from '../lib/settings'
+import { exportProtectedSettings, readTransferredSettings } from '../lib/settings-transfer'
+import { bridgeUrl } from '../services/atem-controller'
 import type { AppSettings, ConnectionProfile } from '../types'
 import { Section, Toggle } from './ui'
 
@@ -47,6 +49,8 @@ export function SettingsTab({
 }) {
   const [showPassword, setShowPassword] = useState(false)
   const [importMessage, setImportMessage] = useState('')
+  const [transferPassphrase, setTransferPassphrase] = useState('')
+  const [transferring, setTransferring] = useState(false)
   const importRef = useRef<HTMLInputElement>(null)
   const urlError = profile.url ? validateObsUrl(profile.url) : null
 
@@ -68,29 +72,45 @@ export function SettingsTab({
     })
   }
 
-  const downloadExport = () => {
-    const blob = new Blob([exportSettings(settings)], { type: 'application/json' })
+  const download = (json: string, protectedFile = false) => {
+    const blob = new Blob([json], { type: 'application/json' })
     const anchor = document.createElement('a')
     anchor.href = URL.createObjectURL(blob)
-    anchor.download = `obs-remote-panel-settings-${new Date().toISOString().slice(0, 10)}.json`
+    anchor.download = `obs-remote-panel-${protectedFile ? 'encrypted-' : ''}settings-${new Date().toISOString().slice(0, 10)}.json`
     anchor.click()
     URL.revokeObjectURL(anchor.href)
   }
 
-  const readImport = async (file: File) => {
+  const downloadProtected = async () => {
+    if (!window.confirm('保存済みのOBSパスワード・ATEMキーを含めて暗号化します。ファイルとパスフレーズは別々に、安全な方法で渡してください。続行しますか？')) return
+    setTransferring(true)
     try {
-      replaceSettings(importSettings(await file.text()))
-      setImportMessage('設定を読み込みました。パスワードはインポートされません。')
+      download(await exportProtectedSettings(settings, transferPassphrase), true)
+      setTransferPassphrase('')
+      setImportMessage('暗号化ファイルを書き出しました。別端末では同じパスフレーズを入力して取り込んでください。')
+    } catch (error) { setImportMessage(error instanceof Error ? error.message : '書き出せませんでした。') }
+    finally { setTransferring(false) }
+  }
+
+  const readImport = async (file: File) => {
+    setTransferring(true)
+    try {
+      if (file.size > 4 * 1024 * 1024) throw new Error('設定ファイルが大きすぎます（最大4MB）。')
+      const result = await readTransferredSettings(await file.text(), transferPassphrase)
+      if (!window.confirm(`${result.settings.profiles.length}件の環境プロファイルで現在の設定を置き換えます。必要なら先に書き出してください。${result.protected ? 'パスワード・キーもこのブラウザに保存されます。共用端末には取り込まないでください。' : 'パスワード・キーは含まれません。'} 続行しますか？`)) return
+      replaceSettings(result.settings)
+      setTransferPassphrase('')
+      setImportMessage('設定を取り込みました。Tailscale接続を確認し、各タブから接続してください。自動接続は行いません。')
     } catch (error) {
       setImportMessage(error instanceof Error ? error.message : '設定を読み込めませんでした。')
-    }
+    } finally { setTransferring(false) }
   }
 
   return (
     <div className="tab-sections">
       <Section
-        title="OBS接続プロファイル"
-        description="本番ではTailscale Serveが発行したtailnet内のWSS URLだけを使用してください。"
+        title="環境プロファイル（OBS・ATEM）"
+        description="同じ環境のOBS・ATEM接続先と操作設定をまとめます。接続・操作は各タブで明示的に行います。"
         actions={<button className="button secondary" onClick={addProfile}>追加</button>}
       >
         <label>
@@ -136,6 +156,21 @@ export function SettingsTab({
           checked={profile.autoReconnect}
           onChange={(autoReconnect) => updateProfile((current) => ({ ...current, autoReconnect }))}
         />
+        <label>ATEM仲介サービスのHTTPS URL（ATEMを使う場合）
+          <input type="url" value={profile.atem?.url ?? ''} placeholder="https://your-pc.your-tailnet.ts.net/atem"
+            onChange={(event) => updateProfile((current) => ({ ...current, atem: { url: event.target.value.trim() } }))} />
+          <small>URL変更時は保存したATEMキーを解除します。キーの入力・保存はATEMタブで行います。</small>
+        </label>
+        <button className="button secondary" disabled={!profile.url} onClick={() => {
+          try {
+            const obs = new URL(profile.url)
+            if (obs.protocol !== 'wss:') throw new Error('WSS URLを設定してください。')
+            const proposed = bridgeUrl(`https://${obs.host}/atem`)
+            if (window.confirm(`OBSと同じPCを使う場合の候補です。${proposed} を設定しますか？保存したATEMキーは解除されます。`)) {
+              updateProfile((current) => ({ ...current, atem: { url: proposed } }))
+            }
+          } catch { setImportMessage('OBSのWSS URLを確認してください。') }
+        }}>OBSと同じPCのATEM URLを入力</button>
         <button className="button danger-outline" disabled={settings.profiles.length === 1} onClick={removeProfile}>
           このプロファイルを削除
         </button>
@@ -157,7 +192,12 @@ export function SettingsTab({
         ))}
       </Section>
 
-      <Section title="ローカル設定" description="JSONにはOBSパスワードと暗号鍵を含めません。">
+      <Section title="別端末への引き継ぎ・バックアップ" description="通常のJSONにはOBSパスワード・ATEMキーを含めません。設定の取り込みだけではネットワーク設定や接続は行いません。">
+        <ol>
+          <li>新しい端末を同じTailscaleネットワークへ接続します。</li>
+          <li>この公開ページを開き、設定ファイルを取り込むか、下のクラウド同期を使います。</li>
+          <li>環境プロファイルを選び、OBS・ATEMへそれぞれ接続します。仲介PCは起動したままにします。</li>
+        </ol>
         <Toggle
           label="危険な出力操作を確認する"
           checked={settings.ui.confirmDangerousActions}
@@ -167,8 +207,8 @@ export function SettingsTab({
           }))}
         />
         <div className="button-row">
-          <button className="button secondary" onClick={downloadExport}>JSONエクスポート</button>
-          <button className="button secondary" onClick={() => importRef.current?.click()}>JSONインポート</button>
+          <button className="button secondary" disabled={transferring} onClick={() => download(exportSettings(settings))}>JSONエクスポート（キーなし）</button>
+          <button className="button secondary" disabled={transferring} onClick={() => importRef.current?.click()}>設定ファイルを取り込む</button>
           <input
             ref={importRef}
             type="file"
@@ -181,6 +221,11 @@ export function SettingsTab({
             }}
           />
         </div>
+        <label>引き継ぎ用パスフレーズ（暗号化ファイル用・12文字以上）
+          <input type="password" autoComplete="off" value={transferPassphrase} onChange={(event) => setTransferPassphrase(event.target.value)} />
+        </label>
+        <button className="button secondary" disabled={transferring} onClick={() => void downloadProtected()}>暗号化ファイルで渡す（保存済みキーを含む）</button>
+        <small>パスフレーズは保存しません。十分に長く推測されにくいものを使ってください。ファイルと同じメッセージでは送らないでください。未保存のATEMキーは含まれません。</small>
         {importMessage && <p className="status-message">{importMessage}</p>}
       </Section>
 
@@ -210,6 +255,10 @@ export function SettingsTab({
                 ui: { ...current.ui, syncPasswords }
               }))}
             />
+            <Toggle label="保存したATEMキーも暗号化して同期・復元する"
+              checked={Boolean(settings.ui.syncAtemKeys)}
+              onChange={(syncAtemKeys) => updateSettings((current) => ({ ...current, ui: { ...current.ui, syncAtemKeys } }))} />
+            <small>ATEMキーの復元はこの項目を有効にしてから取り込んでください。復元するとこのブラウザにも保存されます。共用端末では有効にしないでください。</small>
             <label>
               同期用パスフレーズ（一時保持のみ）
               <input

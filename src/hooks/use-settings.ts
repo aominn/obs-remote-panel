@@ -12,7 +12,7 @@ type SettingsUpdater = (current: AppSettings) => AppSettings
 
 export function useSettings() {
   const [settings, setSettingsState] = useState<AppSettings>(() => loadSettings())
-  const storageError: string | null = null
+  const [storageError, setStorageError] = useState<string | null>(null)
 
   useEffect(() => {
     const onStorage = (event: StorageEvent) => {
@@ -20,7 +20,7 @@ export function useSettings() {
       try {
         const incoming: unknown = JSON.parse(event.newValue)
         if (validateSettings(incoming) && incoming.revision > settings.revision) {
-          setSettingsState(incoming)
+          setSettingsState(loadSettings())
         }
       } catch {
         // A broken value in another tab must not replace the valid in-memory settings.
@@ -33,13 +33,13 @@ export function useSettings() {
   const updateSettings = useCallback((updater: SettingsUpdater) => {
     setSettingsState((current) => {
       const next = touchSettings(updater(current))
-      saveSettings(next)
+      setStorageError(saveSettings(next) ? null : 'このブラウザへ設定を保存できません。端末を閉じる前に設定を書き出してください。')
       return next
     })
   }, [])
 
   const replaceSettings = useCallback((next: AppSettings) => {
-    saveSettings(next)
+    setStorageError(saveSettings(next) ? null : 'このブラウザへ設定を保存できません。端末を閉じる前に設定を書き出してください。')
     setSettingsState(next)
   }, [])
 

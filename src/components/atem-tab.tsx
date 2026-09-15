@@ -1,13 +1,23 @@
 import { useState, useSyncExternalStore } from 'react'
 import { AtemController, type AtemAction } from '../services/atem-controller'
 import { Section } from './ui'
+import type { ConnectionProfile } from '../types'
 
-export function AtemTab({ controller, mockMode }: { controller: AtemController; mockMode: boolean }) {
+export function AtemTab({ controller, mockMode, profile, updateProfile }: {
+  controller: AtemController; mockMode: boolean
+  profile?: ConnectionProfile
+  updateProfile?: (updater: (profile: ConnectionProfile) => ConnectionProfile) => void
+}) {
   const state = useSyncExternalStore(controller.subscribe, controller.getState)
-  const [url, setUrl] = useState(() => {
-    try { return localStorage.getItem('obs-remote-panel.atem-url') || '' } catch { return '' }
-  })
+  const [fallbackUrl, setFallbackUrl] = useState('')
+  const url = profile?.atem?.url ?? fallbackUrl
+  const setUrl = (value: string) => {
+    setFallbackUrl(value.trim())
+    setToken('')
+    updateProfile?.((current) => ({ ...current, atem: { url: value.trim() } }))
+  }
   const [token, setToken] = useState('')
+  const [remember, setRemember] = useState(Boolean(profile?.atem?.token))
   const [connecting, setConnecting] = useState(false)
   const [error, setError] = useState('')
   const disabled = !state.connected || state.busy || state.transitioning || connecting
@@ -15,9 +25,10 @@ export function AtemTab({ controller, mockMode }: { controller: AtemController; 
     setConnecting(true)
     setError('')
     try {
-      await controller.connect(url.trim(), token)
+      const effectiveToken = token || profile?.atem?.token || ''
+      await controller.connect(url.trim(), effectiveToken)
       if (!mockMode) {
-        try { localStorage.setItem('obs-remote-panel.atem-url', url.trim()) } catch { /* Optional URL persistence. */ }
+        updateProfile?.((current) => ({ ...current, atem: { url: url.trim(), ...(remember ? { token: effectiveToken } : {}) } }))
       }
       setToken('')
     } catch (cause) {
@@ -41,9 +52,16 @@ export function AtemTab({ controller, mockMode }: { controller: AtemController; 
           <label>仲介サービスのHTTPS URL
             <input type="url" value={url} placeholder="https://your-pc.your-tailnet.ts.net/atem" onChange={(event) => setUrl(event.target.value)} disabled={connecting} />
           </label>
-          <label>接続キー（保存しません）
+          <p>環境：{profile?.name ?? 'ATEM'}。接続先は「接続・同期」のプロファイルと一緒に引き継げます。</p>
+          <label>接続キー
             <input type="password" autoComplete="off" value={token} onChange={(event) => setToken(event.target.value)} disabled={connecting} />
           </label>
+          {profile?.atem?.token && <p>この端末に保存したキーを使用できます。変更する場合だけ入力してください。</p>}
+          <label><input type="checkbox" checked={remember} onChange={(event) => {
+            setRemember(event.target.checked)
+            if (!event.target.checked) updateProfile?.((current) => ({ ...current, atem: { url: current.atem?.url ?? '' } }))
+          }} />この端末にキーを記憶する（自分専用の端末のみ）</label>
+          <small>ブラウザ内には暗号化せず保存します。端末ロックを使用し、共用端末では選ばないでください。Windowsの暗号化保存とは異なります。解除すると保存キーを削除します。</small>
         </>}
         <div className="button-row">
           <button className="button accent" disabled={connecting || state.connected} onClick={() => void connect()}>{connecting ? '接続中…' : 'ATEMに接続'}</button>

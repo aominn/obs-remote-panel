@@ -23,6 +23,8 @@ GitHub Pages、Tailscale、Supabaseの無料枠を使って試作できます（
 
 ## 1. ローカルまたはモックで起動
 
+WindowsでATEMを使う場合は `start-atem.cmd` をダブルクリックして起動できます。初回のキー生成・保存、次回の再利用、スマホや別PCへの設定引き継ぎは[簡単起動と環境プロファイルのガイド](docs/SETUP_ENVIRONMENT.md)を参照してください。
+
 Node.js 20.19以上を用意します。
 
 ```bash
