@@ -1,6 +1,12 @@
 # ATEMの最小操作
 
-ATEM Mini Pro ISO（HDMI 4入力）とATEM Mini Extreme（HDMI 8入力）の、プレビュー選択・プログラム直接選択・CUT・AUTOを追加しています。操作するM/Eは1つ目（M/E 0）です。音声・ワイプ・マクロ・サイズ設定は操作しません。
+ATEM Mini／Mini Pro／Mini Pro ISO（HDMI最大4入力）とATEM Mini Extreme／Mini Extreme ISO（HDMI最大8入力）の、プレビュー選択・プログラム直接選択・CUT・AUTOを追加しています。操作するM/Eは1つ目（M/E 0）です。音声・ワイプ・マクロ・サイズ設定は操作しません。
+
+接続先IPをPC側で指定すると機種IDを自動判定します。手動の機種選択は不要です。入力名・入力一覧は実機が返した物理HDMI入力から取得し、未取得の入力は補完しません。別のATEMを使う場合は仲介サービスを停止してATEM_ADDRESSを変更し、再起動してください。同時に複数台を操作する機能はありません。
+
+対象外のSDI、Television Studio、Constellation、Mini Extreme ISO G2、未知の機種では操作を無効にします。ライブラリが認識できる機種すべてを動作保証するものではありません。
+
+検証状況：Mini Extreme ISO（ソフトウェア9.5.1）はLAN接続と機種・本番・プレビューの状態取得を確認済みです。実機への切り替え命令、映像結果、他4機種は未検証です。5機種の自動判定・入力制限・命令の送信先はFakeによる自動テストで確認します。
 
 ## 接続構成
 
@@ -86,6 +92,6 @@ npm.cmd test --prefix bridge
 
 同じPCでローカル開発する場合は、ATEM_BRIDGE_ORIGINSにViteの正確なorigin（例: http://localhost:5173）を指定し、接続先を http://127.0.0.1:8788 にします。複数originはカンマ区切り。HTTPSのPagesからはTailscaleのHTTPSを使用してください。
 
-実機では両機種それぞれで、入力数・入力名・本体操作の同期・プレビューが本番を変えないこと・CUT/AUTO・抜線復帰を確認してください。自動テストは実機映像やATEMファームウェアとの相性までは検証しません。
+実機では対象5機種それぞれで、入力数・入力名・本体操作の同期・プレビューが本番を変えないこと・CUT/AUTO・抜線復帰を確認してください。自動テストは実機映像やATEMファームウェアとの相性までは検証しません。
 
 参考: [atem-connection](https://github.com/Sofie-Automation/sofie-atem-connection)、[Tailscale Serve](https://tailscale.com/docs/reference/tailscale-cli/serve)

@@ -1,17 +1,26 @@
 import { createServer } from 'node:http'
 import { timingSafeEqual } from 'node:crypto'
 
-// Only physical HDMI inputs on the two supported models are exposed.
+// Model IDs from atem-connection 3.10.2. Do not infer support from product names.
+const MINI_INPUT_LIMITS = new Map([
+  [13, 4], // Mini
+  [14, 4], // Mini Pro
+  [15, 4], // Mini Pro ISO
+  [16, 8], // Mini Extreme
+  [17, 8] // Mini Extreme ISO (not G2)
+])
+
+// Show only physical HDMI inputs actually reported by a supported device.
 export function snapshot(atem, connected) {
   const state = atem.state
-  const count = state?.info.model === 15 ? 4 : state?.info.model === 16 ? 8 : 0
+  const count = MINI_INPUT_LIMITS.get(state?.info.model) || 0
   const me = state?.video.mixEffects[0]
   const ready = Boolean(connected && count && me)
   return {
     connected: ready,
     model: state?.info.productIdentifier || '',
     inputs: ready ? Object.values(state.inputs)
-      .filter((input) => input.inputId >= 1 && input.inputId <= count && input.internalPortType === 0)
+      .filter((input) => Number.isInteger(input.inputId) && input.inputId >= 1 && input.inputId <= count && input.internalPortType === 0)
       .sort((a, b) => a.inputId - b.inputId)
       .map((input) => ({ id: input.inputId, name: input.longName || `HDMI ${input.inputId}` })) : [],
     program: ready ? me.programInput : null,

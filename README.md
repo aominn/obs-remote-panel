@@ -6,7 +6,7 @@ GitHub Pages、Tailscale、Supabaseの無料枠を使って試作できます（
 
 ## 主な機能
 
-- ATEM Mini Pro ISO／Mini ExtremeのLAN制御（プレビュー・本番選択・CUT／AUTO）。[ATEM仲介サービスの起動と接続手順](docs/SETUP_ATEM.md)
+- ATEM Mini／Mini Pro／Mini Pro ISO／Mini Extreme／Mini Extreme ISOのLAN制御（機種自動判定、プレビュー・本番選択・CUT／AUTO）。実機検証状況は[ATEM仲介サービスの起動と接続手順](docs/SETUP_ATEM.md)を参照してください。
 
 - 複数のOBS接続プロファイル、接続タイムアウト、自動再接続（指数バックオフ、最大30秒）
 - クイック操作の追加、削除、名前/色変更、スマートフォン対応の並べ替え
