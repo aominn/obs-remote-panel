@@ -23,6 +23,22 @@ describe('ローカル専用モード', () => {
     expect(screen.getByText('クイック操作')).toBeVisible()
   })
 
+  it('paired profiles do not ask for hardware URLs or passwords; direct profiles remain available', async () => {
+    const settings = createDefaultSettings()
+    const paired = { ...createProfile('登録済みの機材PC'), hub: { url: 'https://pc.example.ts.net/panel' } }
+    settings.profiles.push(paired)
+    settings.activeProfileId = paired.id
+    localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings))
+    const user = userEvent.setup()
+    render(<App />)
+    await user.click(screen.getByRole('button', { name: /接続・同期$/ }))
+    expect(screen.queryByLabelText('WSS接続先')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('OBS WebSocketパスワード')).not.toBeInTheDocument()
+    expect(screen.getByText(/端末登録方式で接続します/)).toBeVisible()
+    await user.selectOptions(screen.getByLabelText('プロファイル', { exact: true }), settings.profiles[0].id)
+    expect(screen.getByLabelText('WSS接続先')).toBeVisible()
+  })
+
   it('environment changes disconnect ATEM without reconnecting or switching hardware', async () => {
     const settings = createDefaultSettings()
     const other = createProfile('会場B')

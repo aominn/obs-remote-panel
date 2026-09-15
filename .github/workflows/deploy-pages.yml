@@ -29,6 +29,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Install bridge dependencies
+        # Broker tests also exercise the local QR encoder.
+        run: npm ci --prefix bridge --ignore-scripts
+
       - name: Typecheck, lint, and test
         run: npm run check
 

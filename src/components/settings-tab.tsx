@@ -5,6 +5,7 @@ import { exportProtectedSettings, readTransferredSettings } from '../lib/setting
 import { bridgeUrl } from '../services/atem-controller'
 import type { AppSettings, ConnectionProfile } from '../types'
 import { Section, Toggle } from './ui'
+import { DevicePairing } from './device-pairing'
 
 type CloudSync = ReturnType<typeof useCloudSync>
 
@@ -36,7 +37,10 @@ export function SettingsTab({
   updateProfile,
   replaceSettings,
   mockMode,
-  controller
+  controller,
+  initialPairingLink = '',
+  onRegistered = () => {},
+  onForgetDevice = () => {}
 }: {
   settings: AppSettings
   profile: ConnectionProfile
@@ -46,6 +50,9 @@ export function SettingsTab({
   replaceSettings: (settings: AppSettings) => void
   mockMode: boolean
   controller: { simulateDisconnect?: () => void; failNextConnection?: () => void }
+  initialPairingLink?: string
+  onRegistered?: (url: string, name: string) => void
+  onForgetDevice?: () => void
 }) {
   const [showPassword, setShowPassword] = useState(false)
   const [importMessage, setImportMessage] = useState('')
@@ -108,6 +115,7 @@ export function SettingsTab({
 
   return (
     <div className="tab-sections">
+      <DevicePairing initialLink={initialPairingLink} profile={profile} mockMode={mockMode} onRegistered={onRegistered} updateProfile={updateProfile} onForget={onForgetDevice} />
       <Section
         title="環境プロファイル（OBS・ATEM）"
         description="同じ環境のOBS・ATEM接続先と操作設定をまとめます。接続・操作は各タブで明示的に行います。"
@@ -126,6 +134,7 @@ export function SettingsTab({
           プロファイル名
           <input value={profile.name} onChange={(event) => updateProfile((current) => ({ ...current, name: event.target.value }))} />
         </label>
+        {profile.hub ? <p>端末登録方式で接続します。OBSのWSS URL・パスワード、ATEMキーの入力は不要です。</p> : <>
         <label>
           WSS接続先
           <input
@@ -151,11 +160,6 @@ export function SettingsTab({
             </button>
           </div>
         </label>
-        <Toggle
-          label="切断時に自動再接続する"
-          checked={profile.autoReconnect}
-          onChange={(autoReconnect) => updateProfile((current) => ({ ...current, autoReconnect }))}
-        />
         <label>ATEM仲介サービスのHTTPS URL（ATEMを使う場合）
           <input type="url" value={profile.atem?.url ?? ''} placeholder="https://your-pc.your-tailnet.ts.net/atem"
             onChange={(event) => updateProfile((current) => ({ ...current, atem: { url: event.target.value.trim() } }))} />
@@ -171,6 +175,12 @@ export function SettingsTab({
             }
           } catch { setImportMessage('OBSのWSS URLを確認してください。') }
         }}>OBSと同じPCのATEM URLを入力</button>
+        </>}
+        <Toggle
+          label="切断時に自動再接続する"
+          checked={profile.autoReconnect}
+          onChange={(autoReconnect) => updateProfile((current) => ({ ...current, autoReconnect }))}
+        />
         <button className="button danger-outline" disabled={settings.profiles.length === 1} onClick={removeProfile}>
           このプロファイルを削除
         </button>

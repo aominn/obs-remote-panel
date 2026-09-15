@@ -23,6 +23,8 @@ GitHub Pages、Tailscale、Supabaseの無料枠を使って試作できます（
 
 ## 1. ローカルまたはモックで起動
 
+機材PCと操作PC・スマホを分けて使う場合は、新しい[端末登録方式](docs/DEVICE_PAIRING.md)を利用できます。機材PCで `start-panel.cmd` を起動し、QR／登録リンクから申請した操作端末を承認します。OBSパスワードの手渡しは不要です。
+
 WindowsでATEMを使う場合は `start-atem.cmd` をダブルクリックして起動できます。初回のキー生成・保存、次回の再利用、スマホや別PCへの設定引き継ぎは[簡単起動と環境プロファイルのガイド](docs/SETUP_ENVIRONMENT.md)を参照してください。
 
 Node.js 20.19以上を用意します。
@@ -90,7 +92,7 @@ Android Chromeならブラウザメニューの「ホーム画面に追加」ま
 npm run dev        # 開発サーバー
 npm run typecheck  # TypeScript
 npm run lint       # ESLint
-npm run test       # Vitest + Testing Library
+npm run test       # Vitest + 仲介テスト（先に npm ci --prefix bridge --ignore-scripts）
 npm run build      # 型チェック + 本番ビルド
 npm run preview    # distのローカル確認
 npm run check      # 型・lint・test・buildを一括実行
