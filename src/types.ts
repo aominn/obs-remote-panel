@@ -31,6 +31,8 @@ export interface ConnectionProfile {
   name: string
   url: string
   password: string
+  // Optional for compatibility with existing version-1 profiles.
+  atem?: { url: string; token?: string }
   autoReconnect: boolean
   selectedSlideshowInput: string
   selectedSourceScene?: string
@@ -47,6 +49,7 @@ export interface ConnectionProfile {
 export interface UiSettings {
   confirmDangerousActions: boolean
   syncPasswords: boolean
+  syncAtemKeys?: boolean
 }
 
 export interface AppSettings {

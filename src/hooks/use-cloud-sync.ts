@@ -169,10 +169,10 @@ export function useCloudSync(
       let next = mergeCloudSettings(settings, remote.settings)
       if (remote.encrypted_secrets) {
         if (!passphrase) {
-          throw new Error('暗号化されたOBSパスワードを復元するには同期用パスフレーズが必要です。')
+          throw new Error('暗号化された接続情報を復元するには同期用パスフレーズが必要です。')
         }
         const secrets = await decryptSecrets(remote.encrypted_secrets as EncryptedSecrets, passphrase)
-        next = applyPasswordSecrets(next, secrets)
+        next = applyPasswordSecrets(next, secrets, Boolean(settings.ui.syncAtemKeys))
       }
       replaceSettings(next)
       lastCloudRevision.current = remote.revision
@@ -208,7 +208,7 @@ export function useCloudSync(
         }
 
         let encryptedSecrets: EncryptedSecrets | null = null
-        if (settings.ui.syncPasswords) {
+        if (settings.ui.syncPasswords || settings.ui.syncAtemKeys) {
           if (!passphrase) throw new Error('パスワード同期には同期用パスフレーズが必要です。')
           encryptedSecrets = await encryptSecrets(getPasswordSecrets(settings), passphrase)
         }

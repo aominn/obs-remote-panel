@@ -1,6 +1,7 @@
 import type { AppSettings, ConnectionProfile, QuickAction } from '../types'
 
 export const SETTINGS_STORAGE_KEY = 'obs-remote-panel.settings.v1'
+export const ATEM_KEYS_STORAGE_KEY = 'obs-remote-panel.atem-keys.v1'
 
 const now = () => new Date().toISOString()
 
@@ -96,6 +97,8 @@ function isProfile(value: unknown): value is ConnectionProfile {
     typeof value.name === 'string' &&
     typeof value.url === 'string' &&
     typeof value.password === 'string' &&
+    (value.atem === undefined || (isObject(value.atem) && typeof value.atem.url === 'string' &&
+      (value.atem.token === undefined || typeof value.atem.token === 'string'))) &&
     typeof value.autoReconnect === 'boolean' &&
     typeof value.selectedSlideshowInput === 'string' &&
     (value.selectedSourceScene === undefined || typeof value.selectedSourceScene === 'string') &&
@@ -123,6 +126,7 @@ export function validateSettings(value: unknown): value is AppSettings {
     isObject(value.ui) &&
     typeof value.ui.confirmDangerousActions === 'boolean' &&
     typeof value.ui.syncPasswords === 'boolean' &&
+    (value.ui.syncAtemKeys === undefined || typeof value.ui.syncAtemKeys === 'boolean') &&
     typeof value.revision === 'number' &&
     Number.isInteger(value.revision) &&
     value.revision >= 0 &&
@@ -133,9 +137,25 @@ export function validateSettings(value: unknown): value is AppSettings {
 export function loadSettings(storage: Pick<Storage, 'getItem'> = localStorage): AppSettings {
   try {
     const raw = storage.getItem(SETTINGS_STORAGE_KEY)
-    if (!raw) return createDefaultSettings()
-    const parsed: unknown = JSON.parse(raw)
-    return validateSettings(parsed) ? parsed : createDefaultSettings()
+    const parsed: unknown = raw ? JSON.parse(raw) : createDefaultSettings()
+    const settings = validateSettings(parsed) ? parsed : createDefaultSettings()
+    // Migrate the old browser-wide URL once, into the active environment only.
+    const legacyUrl = storage.getItem('obs-remote-panel.atem-url')
+    if (legacyUrl && /^https?:\/\//.test(legacyUrl) && !settings.profiles.some((profile) => profile.atem)) {
+      return { ...settings, profiles: settings.profiles.map((profile) => profile.id === settings.activeProfileId
+        ? { ...profile, atem: { url: legacyUrl } } : profile) }
+    }
+    // Keep optional remembered ATEM keys out of the legacy settings document.
+    // Older cached app versions export/sync that document without knowing this field.
+    let keys: unknown = null
+    try { keys = JSON.parse(storage.getItem(ATEM_KEYS_STORAGE_KEY) ?? 'null') } catch { /* No remembered keys. */ }
+    return { ...settings, profiles: settings.profiles.map((profile) => {
+      if (!profile.atem) return profile
+      const saved = isObject(keys) ? keys[profile.id] : null
+      return { ...profile, atem: { url: profile.atem.url,
+        ...(isObject(saved) && saved.url === profile.atem.url && typeof saved.token === 'string'
+          ? { token: saved.token } : {}) } }
+    }) }
   } catch {
     return createDefaultSettings()
   }
@@ -146,7 +166,12 @@ export function saveSettings(
   storage: Pick<Storage, 'setItem'> = localStorage
 ): boolean {
   try {
-    storage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings))
+    const keys = Object.fromEntries(settings.profiles.filter((profile) => profile.atem?.token)
+      .map((profile) => [profile.id, profile.atem]))
+    storage.setItem(ATEM_KEYS_STORAGE_KEY, JSON.stringify(keys))
+    storage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify({ ...settings,
+      profiles: settings.profiles.map((profile) => ({ ...profile,
+        ...(profile.atem ? { atem: { url: profile.atem.url } } : {}) })) }))
     return true
   } catch {
     return false
@@ -164,7 +189,8 @@ export function touchSettings(settings: AppSettings): AppSettings {
 export function withoutSecrets(settings: AppSettings): AppSettings {
   return {
     ...settings,
-    profiles: settings.profiles.map((profile) => ({ ...profile, password: '' }))
+    profiles: settings.profiles.map((profile) => ({ ...profile, password: '',
+      ...(profile.atem ? { atem: { url: profile.atem.url } } : {}) }))
   }
 }
 
@@ -184,33 +210,52 @@ export function mergeCloudSettings(local: AppSettings, cloud: AppSettings): AppS
   if (!validateSettings(cloud)) throw new Error('クラウド設定の形式が不正です。')
   const passwords = new Map(local.profiles.map((profile) => [profile.id, profile.password]))
   return {
-    ...cloud,
-    profiles: cloud.profiles.map((profile) => ({
+    ...withoutSecrets(cloud),
+    ui: { ...cloud.ui, syncAtemKeys: Boolean(local.ui.syncAtemKeys) },
+    profiles: withoutSecrets(cloud).profiles.map((profile) => ({
       ...profile,
-      password: passwords.get(profile.id) ?? ''
+      password: passwords.get(profile.id) ?? '',
+      ...(profile.atem ? { atem: { url: profile.atem.url,
+        ...(local.profiles.find((item) => item.id === profile.id)?.atem?.url === profile.atem.url
+          ? { token: local.profiles.find((item) => item.id === profile.id)?.atem?.token } : {}) } } : {})
     }))
   }
 }
 
 export function getPasswordSecrets(settings: AppSettings): Record<string, string> {
   return Object.fromEntries(
-    settings.profiles
+    [...settings.profiles
+      .filter(() => settings.ui.syncPasswords)
       .filter((profile) => profile.password.length > 0)
-      .map((profile) => [profile.id, profile.password])
+      .map((profile) => [profile.id, profile.password]),
+    ...settings.profiles.filter((profile) => settings.ui.syncAtemKeys && profile.atem?.token)
+      .map((profile) => [`atem:${profile.id}`, JSON.stringify({ url: profile.atem!.url, token: profile.atem!.token })])]
   )
 }
 
 export function applyPasswordSecrets(
   settings: AppSettings,
-  secrets: Record<string, string>
+  secrets: Record<string, string>,
+  includeAtemKeys = false
 ): AppSettings {
   return {
     ...settings,
     profiles: settings.profiles.map((profile) => ({
       ...profile,
-      password: secrets[profile.id] ?? profile.password
+      password: secrets[profile.id] ?? profile.password,
+      ...(includeAtemKeys && profile.atem ? { atem: restoreAtemSecret(profile, secrets) } : {})
     }))
   }
+}
+
+function restoreAtemSecret(profile: ConnectionProfile, secrets: Record<string, string>) {
+  try {
+    const value: unknown = JSON.parse(secrets[`atem:${profile.id}`] ?? 'null')
+    if (isObject(value) && value.url === profile.atem?.url && typeof value.token === 'string' && value.token.length >= 32) {
+      return { url: profile.atem!.url, token: value.token }
+    }
+  } catch { /* Invalid optional secrets do not replace local credentials. */ }
+  return profile.atem!
 }
 
 export function validateObsUrl(url: string, allowInsecure = import.meta.env.DEV): string | null {

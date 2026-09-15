@@ -51,7 +51,16 @@ export default function App() {
     storageError
   } = useSettings()
   const { controller, obsState } = useObs(mockMode)
-  const cloud = useCloudSync(settings, replaceSettings)
+  const replaceEnvironment = useCallback((next: typeof settings) => {
+    atemController.disconnect()
+    void controller.disconnect().catch(() => setNotice('設定を取り込みましたが、OBSの切断状態を確認してください。'))
+    replaceSettings(next)
+  }, [atemController, controller, replaceSettings])
+  const cloud = useCloudSync(settings, replaceEnvironment)
+  useEffect(() => {
+    // A settings change can disconnect, but never silently connects to a new device.
+    atemController.disconnect()
+  }, [atemController, activeProfile.id, activeProfile.atem?.url])
   const {
     needRefresh: [needRefresh, setNeedRefresh],
     offlineReady: [offlineReady, setOfflineReady],
@@ -219,7 +228,8 @@ export default function App() {
       )}
 
       <main id="main-content" className="main-content" tabIndex={-1}>
-        {tab === 'atem' && <AtemTab controller={atemController} mockMode={mockMode} />}
+        {tab === 'atem' && <AtemTab key={activeProfile.id} controller={atemController} mockMode={mockMode}
+          profile={activeProfile} updateProfile={profileUpdater} />}
         {tab === 'quick' && (
           <QuickTab
             profile={activeProfile}
@@ -273,7 +283,7 @@ export default function App() {
             cloud={cloud}
             updateSettings={updateSettings}
             updateProfile={profileUpdater}
-            replaceSettings={replaceSettings}
+            replaceSettings={replaceEnvironment}
             mockMode={mockMode}
             controller={controller}
           />
