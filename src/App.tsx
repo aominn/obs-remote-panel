@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useRegisterSW } from 'virtual:pwa-register/react'
 import { AudioTab } from './components/audio-tab'
+import { AtemTab } from './components/atem-tab'
+import { AtemController } from './services/atem-controller'
 import { DetailsTab } from './components/details-tab'
 import { QuickTab } from './components/quick-tab'
 import { ScenesTab } from './components/scenes-tab'
@@ -20,6 +22,7 @@ const TABS: { id: MainTabId; label: string; icon: string }[] = [
   { id: 'scenes', label: 'シーン', icon: '▣' },
   { id: 'sources', label: 'ソース', icon: '◫' },
   { id: 'audio', label: '音声', icon: '◒' },
+  { id: 'atem', label: 'ATEM', icon: '▤' },
   { id: 'details', label: '詳細', icon: '⚙' },
   { id: 'settings', label: '接続・同期', icon: '⌁' }
 ]
@@ -34,6 +37,8 @@ const STATUS_LABELS: Record<ConnectionStatus, string> = {
 
 export default function App() {
   const mockMode = new URLSearchParams(window.location.search).get('mock') === '1'
+  const [atemController] = useState(() => new AtemController(mockMode))
+  useEffect(() => () => atemController.disconnect(), [atemController])
   const [tab, setTab] = useState<MainTabId>(() => loadActiveTab())
   const [notice, setNotice] = useState<string | null>(null)
   const [online, setOnline] = useState(navigator.onLine)
@@ -214,6 +219,7 @@ export default function App() {
       )}
 
       <main id="main-content" className="main-content" tabIndex={-1}>
+        {tab === 'atem' && <AtemTab controller={atemController} mockMode={mockMode} />}
         {tab === 'quick' && (
           <QuickTab
             profile={activeProfile}
