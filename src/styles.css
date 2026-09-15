@@ -518,7 +518,7 @@ label small, article small, .section-heading p, .status-message { color: var(--m
   bottom: 0;
   left: 0;
   display: grid;
-  grid-template-columns: repeat(6, minmax(54px, 1fr));
+  grid-template-columns: repeat(7, minmax(44px, 1fr));
   width: min(100%, 820px);
   min-height: calc(64px + env(safe-area-inset-bottom));
   margin: 0 auto;
@@ -577,3 +577,16 @@ label small, article small, .section-heading p, .status-message { color: var(--m
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; }
 }
+
+.atem-status { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; margin-top: 1rem; }
+.atem-status > div { display: grid; gap: .4rem; padding: .8rem; min-width: 0; border: 1px solid var(--border); border-radius: 10px; }
+.atem-status strong { overflow-wrap: anywhere; }
+.atem-status .atem-program { border-color: #e35d68; }
+.atem-status .atem-preview { border-color: var(--accent); }
+.atem-inputs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem; }
+.atem-inputs .button { min-height: 56px; display: grid; gap: .25rem; overflow-wrap: anywhere; }
+.atem-program button[aria-pressed="true"] { background: #a72837; color: white; }
+.atem-preview button[aria-pressed="true"] { background: #146442; color: white; }
+.atem-inputs small { color: inherit; }
+.atem-transitions { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; margin: 1rem 0; }
+.atem-transitions .button { min-height: 60px; font-size: 1.1rem; }

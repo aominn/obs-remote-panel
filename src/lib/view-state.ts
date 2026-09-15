@@ -1,4 +1,4 @@
-export type MainTabId = 'quick' | 'scenes' | 'sources' | 'audio' | 'details' | 'settings'
+export type MainTabId = 'quick' | 'scenes' | 'sources' | 'audio' | 'atem' | 'details' | 'settings'
 
 export const ACTIVE_TAB_STORAGE_KEY = 'obs-remote-panel.active-tab.v1'
 
@@ -7,6 +7,7 @@ const MAIN_TABS = new Set<MainTabId>([
   'scenes',
   'sources',
   'audio',
+  'atem',
   'details',
   'settings'
 ])
