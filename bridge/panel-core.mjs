@@ -19,7 +19,7 @@ async function body(req) {
 }
 const bearer = (req) => req.headers.authorization?.startsWith('Bearer ') ? req.headers.authorization.slice(7) : ''
 function send(res, code, value) {
-  res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' })
+  res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' })
   res.end(JSON.stringify(value))
 }
 async function timeout(promise, ms, onTimeout) {

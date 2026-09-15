@@ -6,6 +6,8 @@ import { createPanel } from './panel-core.mjs'
 import { allowedRequest } from './obs-policy.mjs'
 import QRCode from 'qrcode'
 import { request as httpRequest } from 'node:http'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 
 test('pairing is one-use, expires, requires approval, persists only hashes, and can be revoked', () => {
   let time = 0
@@ -68,9 +70,42 @@ async function start(t, opts = {}) {
     const result = await fetch(`http://127.0.0.1:${server.address().port}${path}`, {
       method: data === undefined ? 'GET' : 'POST', headers: { ...(origin ? { Origin: origin } : {}),
         Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: data === undefined ? undefined : JSON.stringify(data) })
-    return { status: result.status, data: await result.json() }
+    return { status: result.status, contentType: result.headers.get('content-type'), data: await result.json() }
   }
-  return { pairing, key, id: req.id, adminSecret, request, obs, calls, port: servers.publicServer.address().port }
+  return { pairing, key, id: req.id, adminSecret, request, obs, calls, port: servers.publicServer.address().port, adminPort: servers.adminServer.address().port }
+}
+
+test('public and admin JSON responses explicitly declare UTF-8, including errors', async (t) => {
+  const env = await start(t)
+  for (const response of [await env.request('/panel/status'), await env.request('/panel/status', undefined, newSecret()),
+    await env.request('/status', undefined, env.adminSecret, '', true), await env.request('/status', undefined, newSecret(), '', true)]) {
+    assert.equal(response.contentType, 'application/json; charset=utf-8')
+  }
+})
+
+for (const shell of ['powershell.exe', 'pwsh.exe']) {
+  test(`${shell} preserves Japanese pending and registered device names`, { skip: process.platform !== 'win32' }, async (t) => {
+    const env = await start(t)
+    const registeredName = '操作用PC・青木'
+    const pendingName = '自分のスマートフォン'
+    const registered = env.pairing.request(env.pairing.issue().invite, registeredName, newSecret())
+    env.pairing.approve(registered.id)
+    env.pairing.request(env.pairing.issue().invite, pendingName, newSecret())
+    // Base64 keeps the assertion independent of the child console's encoding.
+    const command = `$state = Invoke-RestMethod -Uri 'http://127.0.0.1:${env.adminPort}/status' -Headers @{ Authorization = 'Bearer ' + $env:PANEL_TEST_ADMIN }; [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(($state | ConvertTo-Json -Depth 8 -Compress)))`
+    let result
+    try {
+      result = await promisify(execFile)(shell, ['-NoProfile', '-Command', command], {
+        env: { ...process.env, PANEL_TEST_ADMIN: env.adminSecret }, timeout: 15000, windowsHide: true
+      })
+    } catch (error) {
+      if (shell === 'pwsh.exe' && error.code === 'ENOENT') { t.skip('PowerShell 7 is not installed'); return }
+      throw error
+    }
+    const state = JSON.parse(Buffer.from(result.stdout.trim(), 'base64').toString('utf8'))
+    assert.equal(state.pending[0].name, pendingName)
+    assert.equal(state.devices[1].name, registeredName)
+  })
 }
 
 async function rawRequest(env, path, chunks = []) {
