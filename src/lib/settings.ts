@@ -97,6 +97,7 @@ function isProfile(value: unknown): value is ConnectionProfile {
     typeof value.name === 'string' &&
     typeof value.url === 'string' &&
     typeof value.password === 'string' &&
+    (value.hub === undefined || (isObject(value.hub) && typeof value.hub.url === 'string')) &&
     (value.atem === undefined || (isObject(value.atem) && typeof value.atem.url === 'string' &&
       (value.atem.token === undefined || typeof value.atem.token === 'string'))) &&
     typeof value.autoReconnect === 'boolean' &&

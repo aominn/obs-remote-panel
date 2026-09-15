@@ -33,6 +33,7 @@ export interface ConnectionProfile {
   password: string
   // Optional for compatibility with existing version-1 profiles.
   atem?: { url: string; token?: string }
+  hub?: { url: string }
   autoReconnect: boolean
   selectedSlideshowInput: string
   selectedSourceScene?: string

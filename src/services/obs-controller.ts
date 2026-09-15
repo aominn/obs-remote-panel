@@ -1,4 +1,5 @@
 import { OBSWebSocket } from 'obs-websocket-js'
+import { RoutedObsTransport } from './obs-transport'
 import type {
   ConnectionProfile,
   InputAudioMonitorType,
@@ -137,7 +138,7 @@ function withTimeout<T>(promise: Promise<T>, milliseconds: number): Promise<T> {
 }
 
 export class RealObsController implements ObsController {
-  private readonly obs: OBSWebSocket
+  private readonly obs: Pick<OBSWebSocket, 'on' | 'connect' | 'disconnect' | 'call'> & { configure?: (profile: ConnectionProfile) => void }
   private readonly listeners = new Set<Listener>()
   private state: ObsState = structuredClone(EMPTY_OBS_STATE)
   private profile: ConnectionProfile | null = null
@@ -148,7 +149,7 @@ export class RealObsController implements ObsController {
   private sourceRefreshGeneration = 0
   private readonly monitoringUpdates = new Set<string>()
 
-  constructor(obs = new OBSWebSocket()) {
+  constructor(obs: Pick<OBSWebSocket, 'on' | 'connect' | 'disconnect' | 'call'> & { configure?: (profile: ConnectionProfile) => void } = new RoutedObsTransport()) {
     this.obs = obs
     this.bindEventsOnce()
   }
@@ -273,6 +274,7 @@ export class RealObsController implements ObsController {
   }
 
   async connect(profile: ConnectionProfile) {
+    this.obs.configure?.(profile)
     const generation = ++this.connectionGeneration
     this.clearReconnect()
     this.manualDisconnect = false

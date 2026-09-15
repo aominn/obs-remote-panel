@@ -4,5 +4,5 @@
   "type": "module",
   "scripts": { "start": "node server.mjs", "test": "node --test *.node-test.mjs" },
   "engines": { "node": ">=20.19.0" },
-  "dependencies": { "atem-connection": "3.10.2" }
+  "dependencies": { "atem-connection": "3.10.2", "obs-websocket-js": "5.0.8", "qrcode": "1.5.4" }
 }

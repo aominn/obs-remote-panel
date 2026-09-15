@@ -2,6 +2,7 @@ import { useState, useSyncExternalStore } from 'react'
 import { AtemController, type AtemAction } from '../services/atem-controller'
 import { Section } from './ui'
 import type { ConnectionProfile } from '../types'
+import { readRegistration } from '../lib/device-registration'
 
 export function AtemTab({ controller, mockMode, profile, updateProfile }: {
   controller: AtemController; mockMode: boolean
@@ -10,7 +11,7 @@ export function AtemTab({ controller, mockMode, profile, updateProfile }: {
 }) {
   const state = useSyncExternalStore(controller.subscribe, controller.getState)
   const [fallbackUrl, setFallbackUrl] = useState('')
-  const url = profile?.atem?.url ?? fallbackUrl
+  const url = profile?.hub ? `${profile.hub.url}/atem` : profile?.atem?.url ?? fallbackUrl
   const setUrl = (value: string) => {
     setFallbackUrl(value.trim())
     setToken('')
@@ -25,9 +26,10 @@ export function AtemTab({ controller, mockMode, profile, updateProfile }: {
     setConnecting(true)
     setError('')
     try {
-      const effectiveToken = token || profile?.atem?.token || ''
+      const effectiveToken = profile?.hub ? readRegistration(profile.hub.url)?.token || '' : token || profile?.atem?.token || ''
+      if (profile?.hub && !mockMode && !effectiveToken) throw new Error('この操作端末を「接続・同期」から機材PCへ登録してください。')
       await controller.connect(url.trim(), effectiveToken)
-      if (!mockMode) {
+      if (!mockMode && !profile?.hub) {
         updateProfile?.((current) => ({ ...current, atem: { url: url.trim(), ...(remember ? { token: effectiveToken } : {}) } }))
       }
       setToken('')
@@ -47,7 +49,8 @@ export function AtemTab({ controller, mockMode, profile, updateProfile }: {
       {error && <p className="inline-warning" role="alert">{error}</p>}
       <details open={!state.connected}>
         <summary>ATEM接続</summary>
-        {!mockMode && <>
+        {!mockMode && profile?.hub && <p>登録済みの機材PC経由で接続します。ATEMキーの入力は不要です。環境：{profile.name}</p>}
+        {!mockMode && !profile?.hub && <>
           <p>ATEMはOBSと同じPCからLANで制御します。PC側の仲介サービスを起動してください。</p>
           <label>仲介サービスのHTTPS URL
             <input type="url" value={url} placeholder="https://your-pc.your-tailnet.ts.net/atem" onChange={(event) => setUrl(event.target.value)} disabled={connecting} />

@@ -11,7 +11,8 @@ import { SourcesTab } from './components/sources-tab'
 import { useCloudSync } from './hooks/use-cloud-sync'
 import { useObs } from './hooks/use-obs'
 import { useSettings } from './hooks/use-settings'
-import { validateObsUrl } from './lib/settings'
+import { createProfile, validateObsUrl } from './lib/settings'
+import { readRegistration } from './lib/device-registration'
 import { backfillSlideshowActionTargets } from './lib/slideshow'
 import { loadActiveTab, saveActiveTab } from './lib/view-state'
 import type { MainTabId } from './lib/view-state'
@@ -38,8 +39,13 @@ const STATUS_LABELS: Record<ConnectionStatus, string> = {
 export default function App() {
   const mockMode = new URLSearchParams(window.location.search).get('mock') === '1'
   const [atemController] = useState(() => new AtemController(mockMode))
+  const [initialPairingLink] = useState(() => window.location.hash.startsWith('#pair=')
+    ? `https://aominn.github.io/obs-remote-panel/${window.location.hash}` : '')
+  useEffect(() => {
+    if (initialPairingLink) window.history.replaceState(null, '', window.location.pathname + window.location.search)
+  }, [initialPairingLink])
   useEffect(() => () => atemController.disconnect(), [atemController])
-  const [tab, setTab] = useState<MainTabId>(() => loadActiveTab())
+  const [tab, setTab] = useState<MainTabId>(() => initialPairingLink ? 'settings' : loadActiveTab())
   const [notice, setNotice] = useState<string | null>(null)
   const [online, setOnline] = useState(navigator.onLine)
   const {
@@ -57,10 +63,18 @@ export default function App() {
     replaceSettings(next)
   }, [atemController, controller, replaceSettings])
   const cloud = useCloudSync(settings, replaceEnvironment)
+  const onRegistered = useCallback((url: string, name: string) => {
+    updateSettings((current) => {
+      const existing = current.profiles.find((p) => p.hub?.url === url)
+      if (existing) return { ...current, activeProfileId: existing.id }
+      const profile = { ...createProfile(name), hub: { url } }
+      return { ...current, profiles: [...current.profiles, profile], activeProfileId: profile.id }
+    })
+  }, [updateSettings])
   useEffect(() => {
     // A settings change can disconnect, but never silently connects to a new device.
     atemController.disconnect()
-  }, [atemController, activeProfile.id, activeProfile.atem?.url])
+  }, [atemController, activeProfile.id, activeProfile.atem?.url, activeProfile.hub?.url])
   const {
     needRefresh: [needRefresh, setNeedRefresh],
     offlineReady: [offlineReady, setOfflineReady],
@@ -152,7 +166,12 @@ export default function App() {
       setNotice('オフライン中はOBSへ接続できません。')
       return
     }
-    if (!mockMode) {
+    if (!mockMode && activeProfile.hub && !readRegistration(activeProfile.hub.url)) {
+      setNotice('この操作端末を機材PCへ登録してください。')
+      selectTab('settings')
+      return
+    }
+    if (!mockMode && !activeProfile.hub) {
       if (!activeProfile.url) {
         setNotice('接続・同期設定でWSS接続先を入力してください。')
         selectTab('settings')
@@ -286,6 +305,9 @@ export default function App() {
             replaceSettings={replaceEnvironment}
             mockMode={mockMode}
             controller={controller}
+            initialPairingLink={initialPairingLink}
+            onRegistered={onRegistered}
+            onForgetDevice={() => { atemController.disconnect(); void controller.disconnect().catch(reportError) }}
           />
         )}
       </main>
