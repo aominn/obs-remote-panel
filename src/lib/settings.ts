@@ -71,7 +71,11 @@ const QUICK_ACTION_KINDS = new Set([
   'virtual-camera',
   'replay-buffer',
   'replay-save',
-  'studio-transition'
+  'studio-transition',
+  'atem-program',
+  'atem-preview',
+  'atem-cut',
+  'atem-auto'
 ])
 
 function isStringArray(value: unknown): value is string[] {

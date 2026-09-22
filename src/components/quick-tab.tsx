@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useSyncExternalStore } from 'react'
 import { isSlideshowAction, slideshowInputs } from '../lib/slideshow'
+import type { AtemController, AtemState } from '../services/atem-controller'
 import type { ObsController } from '../services/obs-controller'
 import type {
   AppSettings,
@@ -21,18 +22,35 @@ const ACTION_TYPES: { value: QuickActionKind; label: string; needsTarget?: boole
   { value: 'virtual-camera', label: '仮想カメラ開始・停止' },
   { value: 'replay-buffer', label: 'リプレイバッファ開始・停止' },
   { value: 'replay-save', label: 'リプレイバッファ保存' },
-  { value: 'studio-transition', label: 'スタジオトランジション' }
+  { value: 'studio-transition', label: 'スタジオトランジション' },
+  { value: 'atem-program', label: 'ATEM PROGRAMへ切り替え', needsTarget: true },
+  { value: 'atem-preview', label: 'ATEM PREVIEWを選択', needsTarget: true },
+  { value: 'atem-cut', label: 'ATEM CUT' },
+  { value: 'atem-auto', label: 'ATEM AUTO' }
 ]
+
+const ATEM_ACTIONS = new Set<QuickActionKind>([
+  'atem-program', 'atem-preview', 'atem-cut', 'atem-auto'
+])
+
+function isAtemAction(kind: QuickActionKind) {
+  return ATEM_ACTIONS.has(kind)
+}
+
+function needsAtemTarget(kind: QuickActionKind) {
+  return kind === 'atem-program' || kind === 'atem-preview'
+}
 
 function defaultLabel(kind: QuickActionKind) {
   return ACTION_TYPES.find((item) => item.value === kind)?.label ?? '操作'
 }
 
-function actionTargetOptions(kind: QuickActionKind, state: ObsState) {
+function actionTargetOptions(kind: QuickActionKind, state: ObsState, atemState: AtemState) {
   if (kind === 'scene') return state.scenes.map((scene) => scene.name)
   if (isSlideshowAction(kind)) return slideshowInputs(state.inputs).map((input) => input.name)
   if (kind === 'mute') return state.inputs.filter((input) => input.isAudio).map((input) => input.name)
   if (kind === 'source-visibility') return state.sources.map((source) => source.sourceName)
+  if (needsAtemTarget(kind)) return atemState.inputs.map((input) => String(input.id))
   return []
 }
 
@@ -41,6 +59,7 @@ interface Props {
   settings: AppSettings
   obsState: ObsState
   controller: ObsController
+  atemController: AtemController
   updateProfile: (updater: (profile: ConnectionProfile) => ConnectionProfile) => void
   reportError: (error: unknown) => void
 }
@@ -50,14 +69,20 @@ export function QuickTab({
   settings,
   obsState,
   controller,
+  atemController,
   updateProfile,
   reportError
 }: Props) {
   const [editing, setEditing] = useState(false)
   const [newKind, setNewKind] = useState<QuickActionKind>('scene')
   const [newTarget, setNewTarget] = useState('')
+  const atemState = useSyncExternalStore(atemController.subscribe, atemController.getState)
   const connected = obsState.connectionStatus === 'connected'
-  const targets = useMemo(() => actionTargetOptions(newKind, obsState), [newKind, obsState])
+  const atemAvailable = atemState.connected && !atemState.busy && !atemState.transitioning
+  const targets = useMemo(
+    () => actionTargetOptions(newKind, obsState, atemState),
+    [newKind, obsState, atemState]
+  )
   const slideshowNames = useMemo(
     () => new Set(slideshowInputs(obsState.inputs).map((input) => input.name)),
     [obsState.inputs]
@@ -67,6 +92,16 @@ export function QuickTab({
     if (
       settings.ui.confirmDangerousActions &&
       !window.confirm(`${label}を実行します。接続中のOBS出力へ影響します。よろしいですか？`)
+    ) {
+      return
+    }
+    await action()
+  }
+
+  const safeAtemOutput = async (label: string, action: () => Promise<void>) => {
+    if (
+      settings.ui.confirmDangerousActions &&
+      !window.confirm(`${label}を実行します。ATEMの本番出力へ影響します。よろしいですか？`)
     ) {
       return
     }
@@ -113,6 +148,21 @@ export function QuickTab({
         case 'studio-transition':
           await controller.triggerStudioTransition()
           break
+        case 'atem-program':
+          if (action.target) {
+            await safeAtemOutput('ATEM PROGRAMへの切り替え', () =>
+              atemController.command('program', Number(action.target)))
+          }
+          break
+        case 'atem-preview':
+          if (action.target) await atemController.command('preview', Number(action.target))
+          break
+        case 'atem-cut':
+          await safeAtemOutput('ATEM CUT', () => atemController.command('cut'))
+          break
+        case 'atem-auto':
+          await safeAtemOutput('ATEM AUTO', () => atemController.command('auto'))
+          break
       }
     } catch (error) {
       reportError(error)
@@ -155,8 +205,11 @@ export function QuickTab({
         </button>
       }
     >
-      {!connected && !editing && (
+      {!connected && !editing && profile.quickActions.some((action) => !isAtemAction(action.kind)) && (
         <div className="inline-warning">OBS未接続のため操作ボタンは無効です。</div>
+      )}
+      {!atemAvailable && !editing && profile.quickActions.some((action) => isAtemAction(action.kind)) && (
+        <div className="inline-warning">ATEM未接続、または操作中のためATEM操作ボタンは無効です。</div>
       )}
       {profile.quickActions.some(
         (action) =>
@@ -170,16 +223,22 @@ export function QuickTab({
           const unavailableSlideshow =
             isSlideshowAction(action.kind) &&
             (!action.target || !slideshowNames.has(action.target))
-          const editTargets = actionTargetOptions(action.kind, obsState)
+          const unavailableAtemTarget = needsAtemTarget(action.kind) &&
+            !atemState.inputs.some((input) => String(input.id) === action.target)
+          const editTargets = actionTargetOptions(action.kind, obsState, atemState)
+          const targetLabel = needsAtemTarget(action.kind)
+            ? atemState.inputs.find((input) => String(input.id) === action.target)?.name ?? action.target
+            : action.target
           return <div className="quick-item" key={action.id}>
             <button
               className="quick-button"
               style={{ '--action-color': action.color } as React.CSSProperties}
-              disabled={!connected || editing || unavailableSlideshow}
+              disabled={editing || unavailableSlideshow || unavailableAtemTarget ||
+                (isAtemAction(action.kind) ? !atemAvailable : !connected)}
               onClick={() => void execute(action)}
             >
               <span>{action.label}</span>
-              {action.target && <small>{action.target}</small>}
+              {targetLabel && <small>{targetLabel}</small>}
             </button>
             {editing && (
               <div className="quick-editor">
@@ -195,7 +254,7 @@ export function QuickTab({
                     }))
                   }
                 />
-                {isSlideshowAction(action.kind) && (
+                {(isSlideshowAction(action.kind) || needsAtemTarget(action.kind)) && (
                   <select
                     aria-label={`${action.label}の対象`}
                     value={action.target ?? ''}
@@ -210,9 +269,13 @@ export function QuickTab({
                   >
                     {!action.target && <option value="">選択してください</option>}
                     {action.target && !editTargets.includes(action.target) && (
-                      <option value={action.target}>{action.target}（OBSにありません）</option>
+                      <option value={action.target}>{action.target}（現在利用できません）</option>
                     )}
-                    {editTargets.map((target) => <option key={target}>{target}</option>)}
+                    {editTargets.map((target) => <option key={target} value={target}>
+                      {needsAtemTarget(action.kind)
+                        ? atemState.inputs.find((input) => String(input.id) === target)?.name
+                        : target}
+                    </option>)}
                   </select>
                 )}
                 <input
@@ -276,7 +339,11 @@ export function QuickTab({
               対象
               <select value={newTarget} onChange={(event) => setNewTarget(event.target.value)}>
                 {targets.length === 0 && <option value="">対象がありません</option>}
-                {targets.map((target) => <option key={target}>{target}</option>)}
+                {targets.map((target) => <option key={target} value={target}>
+                  {needsAtemTarget(newKind)
+                    ? atemState.inputs.find((input) => String(input.id) === target)?.name
+                    : target}
+                </option>)}
               </select>
             </label>
           )}

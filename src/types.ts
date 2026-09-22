@@ -17,6 +17,10 @@ export type QuickActionKind =
   | 'replay-buffer'
   | 'replay-save'
   | 'studio-transition'
+  | 'atem-program'
+  | 'atem-preview'
+  | 'atem-cut'
+  | 'atem-auto'
 
 export interface QuickAction {
   id: string
