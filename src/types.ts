@@ -47,6 +47,8 @@ export interface ConnectionProfile {
   sceneOrder: string[]
   hiddenScenes: string[]
   quickActions: QuickAction[]
+  // Kept outside quickActions on disk so cached v1 clients can validate the profile.
+  atemQuickActions?: { index: number; action: QuickAction }[]
   visibleDetailActions: string[]
   updatedAt: string
 }

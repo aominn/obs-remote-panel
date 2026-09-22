@@ -2,6 +2,7 @@ import { createClient, type Session, type SupabaseClient } from '@supabase/supab
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   applyPasswordSecrets,
+  compatibleSettings,
   getPasswordSecrets,
   mergeCloudSettings,
   validateSettings,
@@ -216,7 +217,7 @@ export function useCloudSync(
         const nextRevision = (remote?.revision ?? 0) + 1
         const values = {
           user_id: session.user.id,
-          settings: withoutSecrets(settings),
+          settings: compatibleSettings(withoutSecrets(settings)),
           encrypted_secrets: encryptedSecrets,
           revision: nextRevision
         }

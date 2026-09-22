@@ -1,5 +1,5 @@
 import { decryptSecrets, encryptSecrets, type EncryptedSecrets } from './crypto'
-import { importSettings, touchSettings, validateSettings } from './settings'
+import { compatibleSettings, importSettings, restoreCompatibleSettings, touchSettings, validateSettings } from './settings'
 import type { AppSettings } from '../types'
 
 const FORMAT = 'obs-remote-panel-encrypted-settings'
@@ -9,7 +9,7 @@ const MAX_SIZE = 4 * 1024 * 1024
 export async function exportProtectedSettings(settings: AppSettings, passphrase: string) {
   if (passphrase.length < 12) throw new Error('引き継ぎ用パスフレーズは12文字以上にしてください。')
   return JSON.stringify({ format: FORMAT, version: 1,
-    payload: await encryptSecrets({ settings: JSON.stringify(settings) }, passphrase) })
+    payload: await encryptSecrets({ settings: JSON.stringify(compatibleSettings(settings)) }, passphrase) })
 }
 
 export async function readTransferredSettings(json: string, passphrase: string): Promise<{ settings: AppSettings; protected: boolean }> {
@@ -23,5 +23,5 @@ export async function readTransferredSettings(json: string, passphrase: string):
   const content = await decryptSecrets(payload, passphrase)
   const settings: unknown = JSON.parse(content.settings)
   if (!validateSettings(settings)) throw new Error('復号した設定の形式が不正です。')
-  return { settings: touchSettings(settings), protected: true }
+  return { settings: touchSettings(restoreCompatibleSettings(settings)), protected: true }
 }

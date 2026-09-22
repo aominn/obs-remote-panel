@@ -78,6 +78,15 @@ const QUICK_ACTION_KINDS = new Set([
   'atem-auto'
 ])
 
+const LEGACY_QUICK_ACTION_KINDS = new Set([
+  'scene', 'slide-previous', 'slide-next', 'mute', 'source-visibility', 'record', 'stream',
+  'virtual-camera', 'replay-buffer', 'replay-save', 'studio-transition'
+])
+
+function isAtemQuickAction(action: QuickAction) {
+  return action.kind.startsWith('atem-')
+}
+
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === 'string')
 }
@@ -114,9 +123,35 @@ function isProfile(value: unknown): value is ConnectionProfile {
     isStringArray(value.hiddenScenes) &&
     Array.isArray(value.quickActions) &&
     value.quickActions.every(isQuickAction) &&
+    (value.atemQuickActions === undefined || (Array.isArray(value.atemQuickActions) &&
+      value.atemQuickActions.every((entry) => isObject(entry) && Number.isInteger(entry.index) &&
+        (entry.index as number) >= 0 && isQuickAction(entry.action) && isAtemQuickAction(entry.action)))) &&
     isStringArray(value.visibleDetailActions) &&
     typeof value.updatedAt === 'string'
   )
+}
+
+export function restoreCompatibleSettings(settings: AppSettings): AppSettings {
+  return { ...settings, profiles: settings.profiles.map((profile) => {
+    if (!profile.atemQuickActions?.length) return profile
+    const quickActions = [...profile.quickActions]
+    for (const entry of [...profile.atemQuickActions].sort((a, b) => a.index - b.index)) {
+      quickActions.splice(Math.min(entry.index, quickActions.length), 0, entry.action)
+    }
+    const rest = { ...profile }
+    delete rest.atemQuickActions
+    return { ...rest, quickActions }
+  }) }
+}
+
+export function compatibleSettings(settings: AppSettings): AppSettings {
+  return { ...settings, profiles: settings.profiles.map((profile) => {
+    const atemQuickActions = profile.quickActions.flatMap((action, index) =>
+      isAtemQuickAction(action) ? [{ index, action }] : [])
+    return { ...profile,
+      quickActions: profile.quickActions.filter((action) => LEGACY_QUICK_ACTION_KINDS.has(action.kind)),
+      ...(atemQuickActions.length ? { atemQuickActions } : { atemQuickActions: undefined }) }
+  }) }
 }
 
 export function validateSettings(value: unknown): value is AppSettings {
@@ -143,7 +178,7 @@ export function loadSettings(storage: Pick<Storage, 'getItem'> = localStorage): 
   try {
     const raw = storage.getItem(SETTINGS_STORAGE_KEY)
     const parsed: unknown = raw ? JSON.parse(raw) : createDefaultSettings()
-    const settings = validateSettings(parsed) ? parsed : createDefaultSettings()
+    const settings = validateSettings(parsed) ? restoreCompatibleSettings(parsed) : createDefaultSettings()
     // Migrate the old browser-wide URL once, into the active environment only.
     const legacyUrl = storage.getItem('obs-remote-panel.atem-url')
     if (legacyUrl && /^https?:\/\//.test(legacyUrl) && !settings.profiles.some((profile) => profile.atem)) {
@@ -174,9 +209,9 @@ export function saveSettings(
     const keys = Object.fromEntries(settings.profiles.filter((profile) => profile.atem?.token)
       .map((profile) => [profile.id, profile.atem]))
     storage.setItem(ATEM_KEYS_STORAGE_KEY, JSON.stringify(keys))
-    storage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify({ ...settings,
+    storage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(compatibleSettings({ ...settings,
       profiles: settings.profiles.map((profile) => ({ ...profile,
-        ...(profile.atem ? { atem: { url: profile.atem.url } } : {}) })) }))
+        ...(profile.atem ? { atem: { url: profile.atem.url } } : {}) })) })))
     return true
   } catch {
     return false
@@ -200,7 +235,7 @@ export function withoutSecrets(settings: AppSettings): AppSettings {
 }
 
 export function exportSettings(settings: AppSettings): string {
-  return JSON.stringify(withoutSecrets(settings), null, 2)
+  return JSON.stringify(compatibleSettings(withoutSecrets(settings)), null, 2)
 }
 
 export function importSettings(json: string): AppSettings {
@@ -208,11 +243,12 @@ export function importSettings(json: string): AppSettings {
   if (!validateSettings(parsed)) {
     throw new Error('設定ファイルの形式またはschemaVersionが不正です。')
   }
-  return touchSettings(withoutSecrets(parsed))
+  return touchSettings(withoutSecrets(restoreCompatibleSettings(parsed)))
 }
 
 export function mergeCloudSettings(local: AppSettings, cloud: AppSettings): AppSettings {
   if (!validateSettings(cloud)) throw new Error('クラウド設定の形式が不正です。')
+  cloud = restoreCompatibleSettings(cloud)
   const passwords = new Map(local.profiles.map((profile) => [profile.id, profile.password]))
   return {
     ...withoutSecrets(cloud),
