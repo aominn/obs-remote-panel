@@ -42,6 +42,17 @@ http://localhost:5173/obs-remote-panel/?mock=1
 
 モックモードで「接続」を押すと、OBSの主要操作を実OBSなしで確認できます。ATEMは「ATEM」タブ内の接続ボタンから個別に開始します。「接続・同期」→「モック診断」ではOBSの通信断と次回接続失敗も試せます。実接続する場合は `?mock=1` を外してください。
 
+### ATEMのクイック操作
+
+ATEMへ接続すると、クイック操作に次のATEMアクションを追加できます。
+
+- `PROGRAM`: 指定した入力を本番映像へ直接切り替える
+- `PREVIEW`: 指定した入力をプレビュー映像に選択する
+- `CUT`: プレビュー映像を本番映像へ即時に切り替える
+- `AUTO`: ATEMに設定されたトランジションでプレビュー映像を本番映像へ切り替える
+
+`PROGRAM`と`PREVIEW`では現在のATEM入力一覧から操作対象を選択します。`CUT`と`AUTO`は現在選択されているプレビュー映像に対して動作します。ATEM未接続時、操作中、またはトランジション中はクイック操作を実行できません。実行前に「ATEM」タブで対象機器へ接続してください。
+
 ## 2. GitHub Pagesを有効化
 
 [GitHub Pages設定手順](docs/SETUP_GITHUB_PAGES.md)に従い、`Settings → Pages → Source: GitHub Actions` を選びます。`main`へのpushまたは手動実行で、テスト後に`dist`がPages artifactとして配備されます。`dist`をブランチへコミットする必要はありません。
