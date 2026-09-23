@@ -17,6 +17,10 @@ export type QuickActionKind =
   | 'replay-buffer'
   | 'replay-save'
   | 'studio-transition'
+  | 'atem-program'
+  | 'atem-preview'
+  | 'atem-cut'
+  | 'atem-auto'
 
 export interface QuickAction {
   id: string
@@ -43,6 +47,8 @@ export interface ConnectionProfile {
   sceneOrder: string[]
   hiddenScenes: string[]
   quickActions: QuickAction[]
+  // Kept outside quickActions on disk so cached v1 clients can validate the profile.
+  atemQuickActions?: { index: number; action: QuickAction }[]
   visibleDetailActions: string[]
   updatedAt: string
 }

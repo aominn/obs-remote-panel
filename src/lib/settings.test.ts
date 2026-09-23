@@ -46,6 +46,29 @@ describe('ローカル設定', () => {
     expect(loaded.profiles[0].id).toBe(settings.profiles[0].id)
   })
 
+  it('既存QuickActionを変更せず同じschemaVersionで読み込む', () => {
+    const settings = createDefaultSettings()
+    const existing = { id: 'old-scene', kind: 'scene' as const, label: '旧シーン',
+      color: '#123456', target: 'Scene A' }
+    settings.profiles[0].quickActions = [existing]
+    const loaded = loadSettings({ getItem: (key) =>
+      key === SETTINGS_STORAGE_KEY ? JSON.stringify(settings) : null })
+    expect(loaded.schemaVersion).toBe(1)
+    expect(loaded.profiles[0].quickActions).toEqual([existing])
+  })
+
+  it('ATEM QuickActionをschemaVersion 1のまま読み込む', () => {
+    const settings = createDefaultSettings()
+    settings.profiles[0].quickActions = [
+      { id: 'program', kind: 'atem-program', label: 'カメラ2を本番へ', color: '#123456', target: '2' },
+      { id: 'cut', kind: 'atem-cut', label: 'CUT', color: '#654321' }
+    ]
+    const loaded = loadSettings({ getItem: (key) =>
+      key === SETTINGS_STORAGE_KEY ? JSON.stringify(settings) : null })
+    expect(loaded.schemaVersion).toBe(1)
+    expect(loaded.profiles[0].quickActions).toEqual(settings.profiles[0].quickActions)
+  })
+
   it('本番接続先はWSSだけを受理する', () => {
     expect(validateObsUrl('wss://obs.example.ts.net/', false)).toBeNull()
     expect(validateObsUrl('ws://100.64.0.1:4455', false)).toContain('wss://')

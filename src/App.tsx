@@ -255,6 +255,7 @@ export default function App() {
             settings={settings}
             obsState={obsState}
             controller={controller}
+            atemController={atemController}
             updateProfile={profileUpdater}
             reportError={reportError}
           />
