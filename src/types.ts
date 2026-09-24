@@ -28,6 +28,8 @@ export interface QuickAction {
   label: string
   color: string
   target?: string
+  // Only atem-program uses this opt-in to skip live-output confirmation.
+  oneTap?: boolean
 }
 
 export interface ConnectionProfile {

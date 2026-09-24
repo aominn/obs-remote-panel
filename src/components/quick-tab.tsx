@@ -150,8 +150,12 @@ export function QuickTab({
           break
         case 'atem-program':
           if (action.target) {
-            await safeAtemOutput('ATEM PROGRAMへの切り替え', () =>
-              atemController.command('program', Number(action.target)))
+            if (action.oneTap === true) {
+              await atemController.command('program', Number(action.target))
+            } else {
+              await safeAtemOutput('ATEM PROGRAMへの切り替え', () =>
+                atemController.command('program', Number(action.target)))
+            }
           }
           break
         case 'atem-preview':
@@ -277,6 +281,27 @@ export function QuickTab({
                         : target}
                     </option>)}
                   </select>
+                )}
+                {action.kind === 'atem-program' && (
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <label className="toggle-row">
+                      <input
+                        type="checkbox"
+                        checked={action.oneTap === true}
+                        onChange={(event) => {
+                          const oneTap = event.target.checked
+                          updateProfile((current) => ({
+                            ...current,
+                            quickActions: current.quickActions.map((item) =>
+                              item.id === action.id ? { ...item, oneTap } : item
+                            )
+                          }))
+                        }}
+                      />
+                      確認なしで1タップ実行
+                    </label>
+                    <small>ONにするとこのボタンは確認なしでATEMの本番出力を切り替えます。</small>
+                  </div>
                 )}
                 <input
                   aria-label={`${action.label}の色`}

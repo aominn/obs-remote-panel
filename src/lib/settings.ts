@@ -99,7 +99,8 @@ function isQuickAction(value: unknown): value is QuickAction {
     QUICK_ACTION_KINDS.has(value.kind) &&
     typeof value.label === 'string' &&
     typeof value.color === 'string' &&
-    (value.target === undefined || typeof value.target === 'string')
+    (value.target === undefined || typeof value.target === 'string') &&
+    (value.oneTap === undefined || typeof value.oneTap === 'boolean')
   )
 }
 
