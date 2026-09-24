@@ -5,6 +5,8 @@ import {
   importSettings,
   loadSettings,
   SETTINGS_STORAGE_KEY,
+  compatibleSettings,
+  validateSettings,
   validateObsUrl
 } from './settings'
 
@@ -73,5 +75,18 @@ describe('ローカル設定', () => {
     expect(validateObsUrl('wss://obs.example.ts.net/', false)).toBeNull()
     expect(validateObsUrl('ws://100.64.0.1:4455', false)).toContain('wss://')
     expect(validateObsUrl('not-a-url', false)).toContain('形式')
+  })
+})
+
+describe('oneTap validation', () => {
+  it.each([undefined, false, true, 'true', 1, null, {}, []])('validates optional boolean %j in both formats', (oneTap) => {
+    const settings = createDefaultSettings()
+    settings.profiles[0].quickActions = [{
+      id: 'program', kind: 'atem-program', label: 'Program', color: '#123456',
+      target: '2', oneTap
+    }] as never
+    const valid = oneTap === undefined || typeof oneTap === 'boolean'
+    expect(validateSettings(settings)).toBe(valid)
+    expect(validateSettings(compatibleSettings(settings))).toBe(valid)
   })
 })

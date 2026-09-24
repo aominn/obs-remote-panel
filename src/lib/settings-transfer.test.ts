@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { createDefaultSettings, createProfile, exportSettings, importSettings, getPasswordSecrets,
   applyPasswordSecrets, mergeCloudSettings, loadSettings, saveSettings, SETTINGS_STORAGE_KEY, ATEM_KEYS_STORAGE_KEY } from './settings'
+import { sharedOperations, applySharedOperations } from './shared-operations'
+import { compatibleSettings, withoutSecrets, validateSettings } from './settings'
 import { exportProtectedSettings, readTransferredSettings } from './settings-transfer'
 
 function configured() {
@@ -79,5 +81,32 @@ describe('environment transfer', () => {
       : 'https://pc.example.ts.net/atem' })
     expect(migrated.profiles[0].atem?.url).toBe('https://pc.example.ts.net/atem')
     expect(migrated.profiles[1].atem).toBeUndefined()
+  })
+})
+
+describe('oneTap transfer preservation', () => {
+  it.each([undefined, false, true])('roundtrips oneTap=%s through all transfer paths', async (oneTap) => {
+    const settings = configured()
+    settings.profiles[0].quickActions.splice(1, 0, {
+      id: 'program', kind: 'atem-program', label: 'Program', color: '#123456', target: '2',
+      ...(oneTap === undefined ? {} : { oneTap })
+    })
+    const expected = settings.profiles[0].quickActions
+    expect(importSettings(exportSettings(settings)).profiles[0].quickActions).toEqual(expected)
+
+    const protectedJson = await exportProtectedSettings(settings, 'a-long-test-passphrase')
+    expect((await readTransferredSettings(protectedJson, 'a-long-test-passphrase'))
+      .settings.profiles[0].quickActions).toEqual(expected)
+
+    const shared = JSON.parse(JSON.stringify(sharedOperations(settings.profiles[0])))
+    expect(shared.quickActions.every((action: { kind: string }) => !action.kind.startsWith('atem-'))).toBe(true)
+    expect(applySharedOperations(createProfile(), shared).quickActions).toEqual(expected)
+
+    // Same serialization and validation used by useCloudSync push/fetch/pull.
+    const cloud = JSON.parse(JSON.stringify(compatibleSettings(withoutSecrets(settings))))
+    expect(validateSettings(cloud)).toBe(true)
+    const local = structuredClone(settings)
+    local.profiles[0].quickActions = []
+    expect(mergeCloudSettings(local, cloud).profiles[0].quickActions).toEqual(expected)
   })
 })

@@ -30,12 +30,12 @@ function oldV1Accepts(value: unknown) {
 }
 
 describe('v1 quick-action compatibility', () => {
-  it('keeps profiles valid for old clients and restores ATEM action order', () => {
+  it.each([undefined, false, true])('keeps profiles valid for old clients and restores ATEM action order (oneTap=%s)', (oneTap) => {
     const settings = createDefaultSettings()
     const originalProfileId = settings.profiles[0].id
     settings.profiles[0].quickActions = [
       { id: 'scene', kind: 'scene', label: 'Scene', color: '#111111', target: 'A' },
-      { id: 'program', kind: 'atem-program', label: 'Program', color: '#222222', target: '2' },
+      { id: 'program', kind: 'atem-program', label: 'Program', color: '#222222', target: '2', ...(oneTap === undefined ? {} : { oneTap }) },
       { id: 'record', kind: 'record', label: 'Record', color: '#333333' },
       { id: 'cut', kind: 'atem-cut', label: 'CUT', color: '#444444' }
     ]
